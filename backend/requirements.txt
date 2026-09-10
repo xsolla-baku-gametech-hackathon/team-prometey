@@ -1,8 +1,12 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.6
 sqlalchemy==2.0.35
 python-multipart==0.0.9
 pygltflib==1.16.2
 trimesh==4.4.9
 numpy==1.26.4
 scipy==1.14.1
+numpy>=1.26.4
+scipy>=1.14.1
