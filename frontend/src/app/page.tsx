@@ -136,7 +136,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#0b0d10]">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#f8fafc]">
       <Header status={status} isError={isError} isLoading={isLoading || isDiffing} />
       <div className="flex flex-1 min-h-0 relative">
         <Sidebar
