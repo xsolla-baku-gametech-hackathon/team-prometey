@@ -46,7 +46,6 @@ export default function Home() {
   const [showGhost, setShowGhost] = useState(true);
   const [showHighlight, setShowHighlight] = useState(true);
   const [autoSpin, setAutoSpin] = useState(false);
-  const [morphVal, setMorphVal] = useState(1); // 0 = V1, 1 = V2 (slider is 0-100)
 
   const [statV1, setStatV1] = useState<number | null>(null);
   const [statV2, setStatV2] = useState<number | null>(null);
@@ -184,7 +183,7 @@ export default function Home() {
         mesh.material = new THREE.MeshBasicMaterial({
           color: GHOST_COLOR,
           transparent: true,
-          opacity: (1 - morphVal) * 0.4 + 0.1,
+          opacity: 0.35,
           depthWrite: false,
           depthTest: false,
         });
@@ -193,7 +192,7 @@ export default function Home() {
       scene.add(ghostGroup);
     }
 
-    // V2 diff + morph mesh
+    // V2 diff mesh
     if (groupV2Raw.current) {
       const diffGroup = groupV2Raw.current.clone(true);
       const v2Meshes = collectMeshes(diffGroup);
@@ -230,9 +229,6 @@ export default function Home() {
           const y2 = pos2.getY(i);
           const z2 = pos2.getZ(i);
 
-          // Morph interpolation for the V1 -> V2 slider
-          pos2.setXYZ(i, x1 + (x2 - x1) * morphVal, y1 + (y2 - y1) * morphVal, z1 + (z2 - z1) * morphVal);
-
           const dist = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2);
           if (dist > EPSILON && showHighlight) {
             const strength = Math.min(dist / 0.3, 1);
@@ -247,15 +243,11 @@ export default function Home() {
           }
         }
 
-        pos2.needsUpdate = true;
-        meshV2.geometry.computeVertexNormals();
         meshV2.geometry.setAttribute("color", new THREE.BufferAttribute(newColors, 3));
         meshV2.material = new THREE.MeshStandardMaterial({
           vertexColors: true,
           roughness: 0.6,
           metalness: 0.05,
-          transparent: true,
-          opacity: Math.max(morphVal, 0.2),
         });
 
         changedCount += meshChanged;
@@ -269,7 +261,7 @@ export default function Home() {
       setStatPct(totalCount ? parseFloat(((changedCount / totalCount) * 100).toFixed(1)) : null);
       setNodeList(nodes);
     }
-  }, [activeView, showGhost, showHighlight, morphVal]);
+  }, [activeView, showGhost, showHighlight]);
 
   useEffect(() => {
     rebuildScene();
@@ -377,18 +369,6 @@ export default function Home() {
               {label}
             </button>
           ))}
-        </div>
-
-        <div className="flex items-center gap-2.5 bg-[#f8fafc] px-3 py-1 rounded-lg border border-[#e2e8f0]">
-          <label className="text-[11px] font-semibold text-[#64748b] whitespace-nowrap">V1 → V2 Keçid Barı:</label>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={morphVal * 100}
-            onChange={(e) => setMorphVal(Number(e.target.value) / 100)}
-            className="w-[140px] accent-[#2563eb] cursor-pointer"
-          />
         </div>
 
         <div className="flex items-center gap-4">
