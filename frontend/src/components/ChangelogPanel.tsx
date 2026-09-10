@@ -209,7 +209,9 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
           </div>
           <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-2.5">
             <div className="text-lg font-bold text-[#0f172a]">{geom.total_changed_vertices.toLocaleString()}</div>
-            <div className="text-[10px] uppercase text-[#94a3b8] font-semibold tracking-wider mt-0.5">Changed Vertices</div>
+            <div className="text-[10px] uppercase text-[#94a3b8] font-semibold tracking-wider mt-0.5">
+              Changed Vertices{!geometry_exact && " (Approx.)"}
+            </div>
           </div>
           <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-2.5">
             <div className="text-lg font-bold text-[#0f172a]">{matDeltas}</div>
