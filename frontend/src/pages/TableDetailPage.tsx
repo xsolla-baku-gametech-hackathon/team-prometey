@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Zap, Trash2, ChevronDown } from "lucide-react";
+import { Zap, Trash2, ChevronDown, Pencil, X } from "lucide-react";
 import { AppShell } from "../components/AppShell";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
+import { Input } from "../components/ui/Input";
 import { AuditResults } from "../components/AuditResults";
-import { deleteTable, fetchHistory, fetchPlans, fetchTable, runAudit } from "../lib/api";
+import { LootTableEditor } from "../components/LootTableEditor";
+import { deleteTable, fetchHistory, fetchPlans, fetchTable, runAudit, updateTable } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type { AuditRunOut, PlanLimits, TableDetail } from "../types";
+import type { AuditRunOut, LootTable, PlanLimits, TableDetail } from "../types";
 
 export const TableDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +24,12 @@ export const TableDetailPage: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editJsonText, setEditJsonText] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -59,6 +67,36 @@ export const TableDetailPage: React.FC = () => {
     navigate("/dashboard");
   };
 
+  const startEditing = () => {
+    if (!detail) return;
+    setEditName(detail.name);
+    setEditJsonText(JSON.stringify(detail.table, null, 2));
+    setEditError(null);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!id) return;
+    setEditError(null);
+    let parsed: LootTable;
+    try {
+      parsed = JSON.parse(editJsonText);
+    } catch (e) {
+      setEditError(`Invalid JSON: ${e instanceof Error ? e.message : "parse error"}`);
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      const updated = await updateTable(id, editName || parsed.table_id || detail!.name, parsed);
+      setDetail(updated);
+      setIsEditing(false);
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : "Failed to save changes");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <AppShell>
@@ -83,54 +121,95 @@ export const TableDetailPage: React.FC = () => {
             <h1 className="text-[28px] font-semibold tracking-[-0.5px] text-ink">{detail.name}</h1>
             <p className="text-[14px] font-mono text-ink-muted mt-1.5">{detail.table.table_id}</p>
           </div>
-          <button
-            onClick={handleDelete}
-            className="text-ink-muted hover:text-danger transition-colors cursor-pointer p-2"
-            title="Delete table"
-          >
-            <Trash2 className="w-4.5 h-4.5" />
-          </button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 mt-4 mb-8">
-          <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
-            {detail.table.items.length} items
-          </span>
-          <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
-            {detail.table.pity ? `Pity: ${detail.table.pity.target_rarity}` : "No pity rule"}
-          </span>
-          {limits && (
-            <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
-              Up to {limits.max_pulls.toLocaleString()} pulls per audit &middot; {user?.plan} plan
-            </span>
+          {!isEditing && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={startEditing}
+                className="text-ink-muted hover:text-accent transition-colors cursor-pointer p-2"
+                title="Edit table"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleDelete}
+                className="text-ink-muted hover:text-danger transition-colors cursor-pointer p-2"
+                title="Delete table"
+              >
+                <Trash2 className="w-4.5 h-4.5" />
+              </button>
+            </div>
           )}
         </div>
 
-        <Card className="p-6 mb-6">
-          <Button onClick={handleRunAudit} disabled={isRunning}>
-            <Zap className="w-4 h-4" /> {isRunning ? "Running audit..." : "Run Audit"}
-          </Button>
-          {error && <div className="mt-3 text-[13px] text-danger bg-danger-soft rounded-md px-3 py-2">{error}</div>}
-        </Card>
-
-        {result && (
-          <Card className="p-6 mb-6">
-            <AuditResults result={result} table={detail.table} canExport={limits?.export ?? false} />
-            {!limits?.export && (
-              <p className="text-[12px] text-ink-muted mt-4 pt-4 border-t border-line">
-                Report export is available on the Studio and Enterprise plans.
-              </p>
+        {!isEditing && (
+          <div className="flex flex-wrap items-center gap-2 mt-4 mb-8">
+            <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
+              {detail.table.items.length} items
+            </span>
+            <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
+              {detail.table.pity ? `Pity: ${detail.table.pity.target_rarity}` : "No pity rule"}
+            </span>
+            {limits && (
+              <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
+                Up to {limits.max_pulls.toLocaleString()} pulls per audit &middot; {user?.plan} plan
+              </span>
             )}
-          </Card>
+          </div>
         )}
 
-        {!result && !isRunning && (
-          <Card className="p-10 text-center text-[13.5px] text-ink-muted">
-            No audit run yet. Click <b>Run Audit</b> above to validate and simulate this table.
+        {isEditing ? (
+          <Card className="p-7 mt-6 mb-6 flex flex-col gap-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-ink">Edit Loot Table</h2>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="text-ink-muted hover:text-ink transition-colors cursor-pointer p-1"
+                title="Cancel"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <Input label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="e.g. Starter Chest v2" />
+            <LootTableEditor jsonText={editJsonText} onChange={setEditJsonText} />
+            {editError && <div className="text-[13px] text-danger bg-danger-soft rounded-md px-3 py-2">{editError}</div>}
+            <div className="flex gap-3">
+              <Button onClick={handleSaveEdit} disabled={isSavingEdit}>
+                {isSavingEdit ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button variant="secondary" onClick={() => setIsEditing(false)}>
+                Cancel
+              </Button>
+            </div>
           </Card>
+        ) : (
+          <>
+            <Card className="p-6 mb-6">
+              <Button onClick={handleRunAudit} disabled={isRunning}>
+                <Zap className="w-4 h-4" /> {isRunning ? "Running audit..." : "Run Audit"}
+              </Button>
+              {error && <div className="mt-3 text-[13px] text-danger bg-danger-soft rounded-md px-3 py-2">{error}</div>}
+            </Card>
+
+            {result && (
+              <Card className="p-6 mb-6">
+                <AuditResults result={result} table={detail.table} canExport={limits?.export ?? false} />
+                {!limits?.export && (
+                  <p className="text-[12px] text-ink-muted mt-4 pt-4 border-t border-line">
+                    Report export is available on the Studio and Enterprise plans.
+                  </p>
+                )}
+              </Card>
+            )}
+
+            {!result && !isRunning && (
+              <Card className="p-10 text-center text-[13.5px] text-ink-muted">
+                No audit run yet. Click <b>Run Audit</b> above to validate and simulate this table.
+              </Card>
+            )}
+          </>
         )}
 
-        {history.length > 1 && (
+        {!isEditing && history.length > 1 && (
           <div>
             <button
               onClick={() => setShowHistory((v) => !v)}

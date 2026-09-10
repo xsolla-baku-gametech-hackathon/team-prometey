@@ -237,6 +237,22 @@ def get_table(
     return _table_detail(_get_owned_table(table_record_id, current_user, db))
 
 
+@app.put("/tables/{table_record_id}", response_model=TableDetail)
+def update_table(
+    table_record_id: str,
+    req: TableCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_session),
+) -> TableDetail:
+    record = _get_owned_table(table_record_id, current_user, db)
+    record.name = req.name
+    record.config_json = req.table.model_dump_json()
+    record.advertised_rates_json = json.dumps(req.table.advertised_rates)
+    db.commit()
+    db.refresh(record)
+    return _table_detail(record)
+
+
 @app.delete("/tables/{table_record_id}")
 def delete_table(
     table_record_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)

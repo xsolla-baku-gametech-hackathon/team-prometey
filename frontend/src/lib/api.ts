@@ -81,6 +81,10 @@ export function fetchTable(id: string): Promise<TableDetail> {
   return request(`/tables/${id}`);
 }
 
+export function updateTable(id: string, name: string, table: LootTable): Promise<TableDetail> {
+  return request(`/tables/${id}`, { method: "PUT", body: JSON.stringify({ name, table }) });
+}
+
 export function deleteTable(id: string): Promise<void> {
   return request(`/tables/${id}`, { method: "DELETE" });
 }
