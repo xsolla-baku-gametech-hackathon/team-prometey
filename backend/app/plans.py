@@ -21,7 +21,9 @@ class PlanLimits(BaseModel):
 PLAN_LIMITS: dict[str, PlanLimits] = {
     "free": PlanLimits(max_tables=1, max_pulls=100_000, export=False, full_history=False),
     "studio": PlanLimits(max_tables=10, max_pulls=1_000_000, export=True, full_history=True),
-    "enterprise": PlanLimits(max_tables=None, max_pulls=1_000_000, export=True, full_history=True),
+    # "1M+" in the pricing copy -- kept meaningfully above Studio's cap so the
+    # tier actually differs server-side, not just in marketing text.
+    "enterprise": PlanLimits(max_tables=None, max_pulls=5_000_000, export=True, full_history=True),
 }
 
 
