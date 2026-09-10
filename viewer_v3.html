@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+<meta charset="UTF-8">
+<title>MeshDiff Viewer — V2</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --dim: #6e7681;
+    --accent: #58a6ff;
+    --ghost: #f85149;
+    --highlight: #3fb950;
+    --added: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; font-weight: 600; margin: 0; }
+  header .sub { font-size: 12px; color: var(--dim); }
+  .uploads { display: flex; gap: 10px; margin-left: auto; }
+  .upload-slot {
+    display: flex; align-items: center; gap: 6px; font-size: 12px;
+    border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px; background: var(--panel);
+  }
+  .upload-slot label { color: var(--dim); }
+  input[type=file] { font-size: 11px; color: var(--text); max-width: 130px; }
+  .toggles { display: flex; gap: 14px; padding: 10px 20px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .toggle input { cursor: pointer; }
+  main { flex: 1; display: flex; min-height: 0; }
+  #viewport { flex: 1; position: relative; }
+  #sidebar {
+    width: 290px; border-left: 1px solid var(--border); padding: 16px;
+    overflow-y: auto; font-size: 12px; background: var(--panel);
+  }
+  #sidebar h2 { font-size: 12px; color: var(--dim); margin: 0 0 10px 0; font-weight: 600; }
+  .stat-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .stat-row .val { color: var(--accent); }
+  .legend { display: flex; align-items: center; gap: 6px; margin: 8px 0; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+  #status { padding: 10px 20px; font-size: 12px; color: var(--dim); border-top: 1px solid var(--border); }
+  .node-list { margin-top: 6px; }
+  .node-item { padding: 4px 0; font-size: 11px; color: var(--dim); }
+  .node-item.changed { color: var(--highlight); }
+  .node-item.added { color: var(--added); }
+  .node-item.removed { color: var(--ghost); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>MeshDiff Viewer</h1>
+    <div class="sub">V1 (köhnə, yaşıl kölgə) + V2 (yeni, əsl rənglər) — iç-içə, dəyişən hissə narıncı vurğulanır</div>
+  </div>
+  <div class="uploads">
+    <div class="upload-slot"><label>V1 (köhnə):</label><input type="file" id="fileV1" accept=".glb,.gltf"></div>
+    <div class="upload-slot"><label>V2 (yeni):</label><input type="file" id="fileV2" accept=".glb,.gltf"></div>
+  </div>
+</header>
+
+<div class="toggles">
+  <label class="toggle"><input type="checkbox" id="toggleGhost" checked> V1 kölgəsini göstər</label>
+  <label class="toggle"><input type="checkbox" id="toggleHighlight" checked> Dəyişikliyi vurğula</label>
+  <label class="toggle"><input type="checkbox" id="toggleSpin"> Avtomatik fırlan</label>
+</div>
+
+<main>
+  <div id="viewport"></div>
+  <div id="sidebar">
+    <h2>DIFF STATİSTİKASI</h2>
+    <div class="stat-row"><span>V1 vertex sayı</span><span class="val" id="statV1">—</span></div>
+    <div class="stat-row"><span>V2 vertex sayı</span><span class="val" id="statV2">—</span></div>
+    <div class="stat-row"><span>Dəyişən vertex</span><span class="val" id="statChanged">—</span></div>
+    <div class="stat-row"><span>Dəyişiklik %</span><span class="val" id="statPct">—</span></div>
+
+    <div class="legend"><span class="swatch" style="background:#f85149; opacity:0.6"></span> V1 (köhnə) — şəffaf qırmızı kölgə, əsl formasında</div>
+    <div class="legend"><span class="swatch" style="background:#3fb950"></span> V2-də dəyişən/yeni nahiyə (yaşıl)</div>
+    <div class="legend"><span class="swatch" style="background:#3fb950"></span> yeni əlavə olunan obyekt (node)</div>
+
+    <h2 style="margin-top:18px">NODE-LAR</h2>
+    <div class="node-list" id="nodeList">—</div>
+
+    <h2 style="margin-top:18px">QEYD</h2>
+    <div style="color:var(--dim); line-height:1.5">
+      Hər iki versiya öz əsl material rənglərində göstərilir. V1 şəffaf overlay kimi eyni koordinatda
+      "içəri basdırılır" ki, məsələn kiçik (köhnə) qulaq, böyük (yeni) qulağın içində/altında görünsün.
+    </div>
+  </div>
+</main>
+
+<div id="status">Fayl gözlənilir...</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const viewport = document.getElementById('viewport');
+const statusEl = document.getElementById('status');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+
+const camera = new THREE.PerspectiveCamera(50, viewport.clientWidth / viewport.clientHeight, 0.1, 100);
+camera.position.set(3, 2, 4);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+viewport.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+dirLight.position.set(3, 5, 4);
+scene.add(dirLight);
+// QEYD: əvvəl burada AxesHelper vardı (qırmızı/yaşıl/mavi xətlər) - bu, koordinat
+// oxlarını göstərirdi, diff-lə heç bir əlaqəsi yox idi, sadəcə qarışıqlıq yaradırdı. Silindi.
+
+// Manual idarəetmə: siçan ilə sürüşdür = fırlat, scroll = zoom, sağ-klik sürüşdür = pan
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 1);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.update();
+
+// GLB ölçüsündən asılı olmayaraq modeli kameraya sığdırır.
+function fitCameraToObject(object, padding = 2.2) {
+  const box = new THREE.Box3().setFromObject(object);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+
+  if (!isFinite(size.x) || !isFinite(size.y) || !isFinite(size.z) ||
+      Math.max(size.x, size.y, size.z) <= 0) {
+    console.warn("Model ölçüsü tapılmadı.");
+    return;
+  }
+
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const fov = camera.fov * (Math.PI / 180);
+  let distance = (maxDim / 2) / Math.tan(fov / 2);
+  distance *= padding;
+
+  // Modelin mərkəzindən bir az perspektivli bucaqdan bax.
+  camera.position.set(
+    center.x + distance * 0.9,
+    center.y + distance * 0.55,
+    center.z + distance * 0.9
+  );
+
+  camera.near = Math.max(maxDim / 10000, 0.001);
+  camera.far = Math.max(maxDim * 100, 1000);
+  camera.updateProjectionMatrix();
+
+  controls.target.copy(center);
+  controls.update();
+}
+
+let angle = 0;
+const toggleSpin = document.getElementById('toggleSpin');
+function animate() {
+  requestAnimationFrame(animate);
+  if (toggleSpin.checked) {
+    // yalnız istifadəçi "Avtomatik fırlan" seçsə, öz-özünə fırlanır (xz-müstəvisində, y sabit qalır)
+    angle += 0.006;
+    const radius = Math.sqrt(camera.position.x ** 2 + camera.position.z ** 2) || 4.5;
+    camera.position.x = Math.sin(angle) * radius;
+    camera.position.z = Math.cos(angle) * radius;
+    camera.lookAt(controls.target);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = viewport.clientWidth / viewport.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+});
+
+const loader = new THREE.GLTFLoader();
+let groupV1 = null, groupV2 = null;
+let v1MeshesByName = {}, v2MeshesByName = {};
+
+const HIGHLIGHT_COLOR = new THREE.Color(0x3fb950); // dəyişən/əlavə olunan -> YAŞIL
+const ADDED_COLOR = new THREE.Color(0x3fb950);      // yeni node -> YAŞIL
+const GHOST_COLOR = new THREE.Color(0xf85149);       // köhnə/silinən -> QIRMIZI
+const EPSILON = 0.02;
+
+function ensureVertexColors(mesh) {
+  // Əgər geometry-də COLOR_0 attribute-u varsa, material-ın onu göstərməsini təmin et
+  const geo = mesh.geometry;
+  if (geo.attributes.color) {
+    mesh.material = mesh.material.clone();
+    mesh.material.vertexColors = true;
+    mesh.material.needsUpdate = true;
+  } else {
+    // Rəng yoxdursa, default boz ver (silinmir, sadəcə fallback)
+    mesh.material = mesh.material.clone();
+  }
+}
+
+function collectMeshes(root) {
+  const out = {};
+  let idx = 0;
+  root.traverse((child) => {
+    if (child.isMesh) {
+      const key = child.name || `mesh_${idx}`;
+      out[key] = child;
+      idx++;
+    }
+  });
+  return out;
+}
+
+function loadFile(fileInput, isV1, onDone) {
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      loader.parse(evt.target.result, '', (gltf) => {
+        gltf.scene.traverse((child) => { if (child.isMesh) ensureVertexColors(child); });
+
+        const meshCount = [];
+        gltf.scene.traverse((child) => {
+          if (child.isMesh) meshCount.push(child.name || "unnamed mesh");
+        });
+
+        if (meshCount.length === 0) {
+          statusEl.textContent = 'Xəta: GLB yükləndi, amma mesh/object tapılmadı.';
+          console.warn("GLB-də mesh tapılmadı.");
+        } else {
+          console.log("GLB mesh-ləri:", meshCount);
+        }
+
+        onDone(gltf.scene);
+        fitCameraToObject(gltf.scene);
+      }, (err) => {
+        console.error("GLB parse error:", err);
+        statusEl.textContent = 'Xəta: ' + (err.message || err);
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function rebuildScene() {
+  if (groupV1) scene.remove(groupV1);
+  if (groupV2) scene.remove(groupV2);
+  if (!groupV1Raw && !groupV2Raw) return;
+
+  const showGhost = document.getElementById('toggleGhost').checked;
+  const showHighlight = document.getElementById('toggleHighlight').checked;
+
+  let changedCount = 0, totalCount = 0;
+  const nodeListEl = document.getElementById('nodeList');
+  let nodeListHTML = '';
+
+  // --- V1: şəffaf "kölgə" olaraq, ƏSL FORMASINDA, yaşıl çalarlı overlay, eyni koordinatda ---
+  if (groupV1Raw && showGhost) {
+    groupV1 = groupV1Raw.clone(true);
+    groupV1.traverse((child) => {
+      if (child.isMesh) {
+        child.material = child.material.clone();
+        child.material.transparent = true;
+        child.material.opacity = 0.35;
+        child.material.depthWrite = false;
+        // VACİB: depthTest də söndürülür ki, kölgə V2-nin OPAK səthinin arxasında
+        // qalanda belə görünsün (rentgen effekti) - əks halda böyük qulağın içindəki
+        // kiçik köhnə qulaq, önündəki opak geometriyaya görə tamamilə gizlənir.
+        child.material.depthTest = false;
+        child.renderOrder = 999; // hər zaman ən sonda, yəni ən üstdə çəkilsin
+        // əsl rəngi saxla, üstünə yüngül yaşıl ton qat (tamamilə əvəz etmə)
+        if (child.material.color) child.material.color.lerp(GHOST_COLOR, 0.35);
+      }
+    });
+    scene.add(groupV1);
+  }
+
+  // --- V2: ƏSL RƏNGLƏRDƏ, dəyişən vertex-lər üstünə highlight qatı (rəngi silmədən) ---
+  if (groupV2Raw) {
+    groupV2 = groupV2Raw.clone(true);
+    const v2Meshes = collectMeshes(groupV2);
+
+    for (const name in v2Meshes) {
+      const meshV2 = v2Meshes[name];
+      const meshV1 = v1MeshesByName ? v1MeshesByName[name] : null;
+
+      if (!meshV1) {
+        // Bu obyekt V1-də yoxdur -> yeni əlavə olunub, bənövşəyi outline ver
+        meshV2.material = meshV2.material.clone();
+        if (meshV2.material.color) meshV2.material.color.lerp(ADDED_COLOR, 0.25);
+        meshV2.material.emissive = ADDED_COLOR.clone();
+        meshV2.material.emissiveIntensity = 0.25;
+        nodeListHTML += `<div class="node-item added">+ ${name} (yeni)</div>`;
+        continue;
+      }
+
+      const pos2 = meshV2.geometry.attributes.position;
+      const pos1 = meshV1.geometry.attributes.position;
+
+      if (pos1.count !== pos2.count) {
+        nodeListHTML += `<div class="node-item changed">~ ${name} (topology dəyişib, N/A)</div>`;
+        continue;
+      }
+
+      totalCount += pos2.count;
+
+      // Rəngi KLONLA (əsl rəngi qorumaq üçün), sonra dəyişən vertex-lərin üstünə narıncı qat
+      const colorAttr = meshV2.geometry.attributes.color;
+      const baseColors = colorAttr ? colorAttr.array.slice() : new Float32Array(pos2.count * 3).fill(0.7);
+      const newColors = new Float32Array(baseColors.length);
+      let meshChanged = 0;
+
+      for (let i = 0; i < pos2.count; i++) {
+        const dx = pos2.getX(i) - pos1.getX(i);
+        const dy = pos2.getY(i) - pos1.getY(i);
+        const dz = pos2.getZ(i) - pos1.getZ(i);
+        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+        const r0 = baseColors[i*3], g0 = baseColors[i*3+1], b0 = baseColors[i*3+2];
+
+        if (dist > EPSILON && showHighlight) {
+          // Əsl rəngi SİLMİRİK - üstünə narıncı qatırıq (blend), məsafəyə görə gücü artır
+          const strength = Math.min(dist / 0.5, 1) * 0.7 + 0.3; // 0.3-1.0 arası
+          newColors[i*3]   = r0 * (1 - strength) + (HIGHLIGHT_COLOR.r) * strength;
+          newColors[i*3+1] = g0 * (1 - strength) + (HIGHLIGHT_COLOR.g) * strength;
+          newColors[i*3+2] = b0 * (1 - strength) + (HIGHLIGHT_COLOR.b) * strength;
+          meshChanged++;
+        } else {
+          newColors[i*3] = r0; newColors[i*3+1] = g0; newColors[i*3+2] = b0;
+        }
+      }
+
+      meshV2.geometry.setAttribute('color', new THREE.BufferAttribute(newColors, 3));
+      meshV2.material = meshV2.material.clone();
+      meshV2.material.vertexColors = true;
+      meshV2.material.needsUpdate = true;
+
+      changedCount += meshChanged;
+      const pct = ((meshChanged / pos2.count) * 100).toFixed(1);
+      const cls = meshChanged > 0 ? 'changed' : '';
+      nodeListHTML += `<div class="node-item ${cls}">${name}: ${meshChanged}/${pos2.count} vertex (${pct}%)</div>`;
+    }
+
+    // V1-də olub V2-də olmayan node-lar (silinib)
+    if (v1MeshesByName) {
+      for (const name in v1MeshesByName) {
+        if (!v2Meshes[name]) {
+          nodeListHTML += `<div class="node-item removed">− ${name} (silinib)</div>`;
+        }
+      }
+    }
+
+    scene.add(groupV2);
+  }
+
+  document.getElementById('statChanged').textContent = totalCount ? changedCount : '—';
+  document.getElementById('statPct').textContent = totalCount ? ((changedCount/totalCount)*100).toFixed(1)+'%' : '—';
+  nodeListEl.innerHTML = nodeListHTML || '—';
+
+  statusEl.textContent = totalCount
+    ? `Diff hesablandı: ${changedCount} / ${totalCount} vertex dəyişib. V1 = şəffaf kölgə, V2 = əsl rənglər + highlight.`
+    : (groupV1Raw || groupV2Raw)
+      ? 'Model yükləndi. İkinci faylı da yükləsəniz diff hesablanacaq.'
+      : 'Fayl gözlənilir...';
+}
+
+let groupV1Raw = null, groupV2Raw = null;
+
+loadFile(document.getElementById('fileV1'), true, (sceneObj) => {
+  groupV1Raw = sceneObj;
+  v1MeshesByName = collectMeshes(sceneObj);
+  document.getElementById('statV1').textContent =
+    Object.values(v1MeshesByName).reduce((s,m)=>s+m.geometry.attributes.position.count,0);
+  statusEl.textContent = 'V1 yükləndi.';
+  rebuildScene();
+});
+
+loadFile(document.getElementById('fileV2'), false, (sceneObj) => {
+  groupV2Raw = sceneObj;
+  v2MeshesByName = collectMeshes(sceneObj);
+  document.getElementById('statV2').textContent =
+    Object.values(v2MeshesByName).reduce((s,m)=>s+m.geometry.attributes.position.count,0);
+  statusEl.textContent = 'V2 yükləndi.';
+  rebuildScene();
+});
+
+document.getElementById('toggleGhost').addEventListener('change', rebuildScene);
+document.getElementById('toggleHighlight').addEventListener('change', rebuildScene);
+</script>
+
+</body>
+</html>

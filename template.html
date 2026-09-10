@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MeshDiff Studio Pro — Clean Edition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-main: #f8fafc;
+    --bg-surface: #ffffff;
+    --border-color: #e2e8f0;
+    --text-primary: #0f172a;
+    --text-secondary: #64748b;
+    --accent: #2563eb;
+    --accent-light: #eff6ff;
+    --diff-changed: #2563eb;
+    --diff-added: #059669;
+    --diff-ghost: #ef4444;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  header {
+    height: 60px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 10;
+  }
+
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-logo {
+    width: 32px; height: 32px;
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px; color: #fff;
+  }
+  .brand-title { font-size: 16px; font-weight: 700; }
+
+  .uploads { display: flex; gap: 12px; }
+  .file-drop {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg-main); border: 1px dashed var(--border-color);
+    padding: 6px 12px; border-radius: 8px;
+  }
+  .file-drop label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .file-drop input[type="file"] { font-size: 11px; color: var(--text-primary); width: 130px; cursor: pointer; }
+
+  .toolbar {
+    height: 50px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-color);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; font-size: 12px;
+  }
+
+  .view-tabs {
+    display: flex; background: var(--bg-main); padding: 3px;
+    border-radius: 8px; border: 1px solid var(--border-color);
+  }
+  .tab-btn {
+    padding: 6px 14px; font-size: 12px; font-weight: 600; border: none;
+    background: transparent; color: var(--text-secondary); border-radius: 6px; cursor: pointer;
+  }
+  .tab-btn.active { background: var(--bg-surface); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  .toggles { display: flex; gap: 16px; align-items: center; }
+  .toggle-btn { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; color: var(--text-secondary); }
+  .toggle-btn input { accent-color: var(--accent); }
+
+  main { flex: 1; display: flex; overflow: hidden; }
+  #viewport { flex: 1; position: relative; background: #ffffff; }
+
+  #sidebar {
+    width: 320px; background: var(--bg-surface);
+    border-left: 1px solid var(--border-color); padding: 20px;
+    display: flex; flex-direction: column; gap: 20px; overflow-y: auto;
+  }
+
+  .card {
+    background: var(--bg-main); border: 1px solid var(--border-color);
+    border-radius: 10px; padding: 14px;
+  }
+  .card-title {
+    font-size: 11px; font-weight: 700; color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px;
+  }
+
+  .stat-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 4px 0; }
+  .stat-val { font-weight: 700; font-family: monospace; }
+  .stat-val.accent { color: var(--accent); }
+
+  .node-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  .node-item {
+    padding: 8px 10px; border-radius: 6px; background: var(--bg-surface);
+    border: 1px solid var(--border-color); font-size: 11px; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .node-item:hover { border-color: var(--accent); background: var(--accent-light); }
+  .node-item.changed { border-left: 3px solid var(--accent); }
+
+  footer {
+    height: 32px; background: var(--bg-surface);
+    border-top: 1px solid var(--border-color); padding: 0 24px;
+    display: flex; align-items: center; font-size: 11px; color: var(--text-secondary);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-logo">Δ</div>
+    <div class="brand-title">MeshDiff Studio</div>
+  </div>
+  <div class="uploads">
+    <div class="file-drop"><label>V1 (Köhnə):</label><input type="file" id="fileV1" accept=".glb,.gltf"></div>
+    <div class="file-drop"><label>V2 (Yeni):</label><input type="file" id="fileV2" accept=".glb,.gltf"></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="view-tabs">
+    <button class="tab-btn" data-view="v1">Yalnız V1</button>
+    <button class="tab-btn" data-view="v2">Yalnız V2</button>
+    <button class="tab-btn active" data-view="diff">Mərkəzi Diff (İç-İçə)</button>
+  </div>
+
+  <div class="toggles">
+    <label class="toggle-btn"><input type="checkbox" id="toggleGhost" checked> V1 Qırmızı Kölgə</label>
+    <label class="toggle-btn"><input type="checkbox" id="toggleHighlight" checked> Dəyişikliyi Vurğula</label>
+    <label class="toggle-btn"><input type="checkbox" id="toggleSpin"> Auto-Rotate</label>
+  </div>
+</div>
+
+<main>
+  <div id="viewport"></div>
+
+  <div id="sidebar">
+    <div class="card">
+      <div class="card-title">Diff Statistikası</div>
+      <div class="stat-row"><span>V1 Toplam Vertex</span><span class="stat-val" id="statV1">—</span></div>
+      <div class="stat-row"><span>V2 Toplam Vertex</span><span class="stat-val" id="statV2">—</span></div>
+      <div class="stat-row"><span>Dəyişən Vertex</span><span class="stat-val accent" id="statChanged">—</span></div>
+      <div class="stat-row"><span>Ümumi Fərq (%)</span><span class="stat-val accent" id="statPct">—</span></div>
+    </div>
+
+    <div class="card" style="flex:1; display:flex; flex-direction:column;">
+      <div class="card-title">Dəyişmiş Hissələr (Kliklə Yaxınlaş)</div>
+      <div class="node-list" id="nodeList">
+        <div style="color:var(--text-secondary); font-size:11px;">Model yüklənməyib.</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <span id="status">Hazırdır. Faylları seçin.</span>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+const viewport = document.getElementById('viewport');
+const statusEl = document.getElementById('status');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+
+const camera = new THREE.PerspectiveCamera(45, viewport.clientWidth / viewport.clientHeight, 0.1, 100);
+camera.position.set(3, 2, 4);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+viewport.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+dirLight.position.set(5, 10, 7);
+scene.add(dirLight);
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+const loader = new THREE.GLTFLoader();
+let groupV1Raw = null, groupV2Raw = null;
+let v1MeshesByName = {}, v2MeshesByName = {};
+let activeView = 'diff';
+
+const HIGHLIGHT_COLOR = new THREE.Color(0x2563eb);
+const GHOST_COLOR = new THREE.Color(0xef4444);
+const EPSILON = 0.01;
+
+function collectMeshes(root) {
+  const out = {};
+  let idx = 0;
+  root.traverse((child) => {
+    if (child.isMesh) {
+      const key = child.name || `mesh_${idx}`;
+      out[key] = child;
+      idx++;
+    }
+  });
+  return out;
+}
+
+function focusOnMesh(mesh) {
+  const box = new THREE.Box3().setFromObject(mesh);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z) || 1;
+
+  const targetCamPos = new THREE.Vector3(
+    center.x + maxDim * 1.5,
+    center.y + maxDim * 1.2,
+    center.z + maxDim * 1.5
+  );
+
+  let step = 0;
+  function animateZoom() {
+    if (step < 25) {
+      camera.position.lerp(targetCamPos, 0.1);
+      controls.target.lerp(center, 0.1);
+      controls.update();
+      step++;
+      requestAnimationFrame(animateZoom);
+    }
+  }
+  animateZoom();
+}
+
+function rebuildScene() {
+  const toRemove = [];
+  scene.children.forEach(c => { if (c.type === "Group") toRemove.push(c); });
+  toRemove.forEach(c => scene.remove(c));
+
+  const showGhost = document.getElementById('toggleGhost').checked;
+  const showHighlight = document.getElementById('toggleHighlight').checked;
+
+  if (activeView === 'v1' && groupV1Raw) {
+    scene.add(groupV1Raw.clone(true));
+    return;
+  }
+  if (activeView === 'v2' && groupV2Raw) {
+    scene.add(groupV2Raw.clone(true));
+    return;
+  }
+
+  // V1 Ghost Mesh
+  if (groupV1Raw && showGhost) {
+    const ghostGroup = groupV1Raw.clone(true);
+    ghostGroup.traverse((child) => {
+      if (child.isMesh) {
+        child.material = child.material.clone();
+        child.material.transparent = true;
+        child.material.opacity = 0.35;
+        child.material.depthWrite = false;
+        child.material.depthTest = false;
+        child.renderOrder = 999;
+        if (child.material.color) child.material.color.set(GHOST_COLOR);
+      }
+    });
+    scene.add(ghostGroup);
+  }
+
+  // V2 Diff Mesh
+  if (groupV2Raw) {
+    const diffGroup = groupV2Raw.clone(true);
+    const v2Meshes = collectMeshes(diffGroup);
+
+    let changedCount = 0, totalCount = 0;
+    let nodeListHTML = '';
+
+    for (const name in v2Meshes) {
+      const meshV2 = v2Meshes[name];
+      const meshV1 = v1MeshesByName[name];
+
+      const pos2 = meshV2.geometry.attributes.position;
+      totalCount += pos2.count;
+
+      if (!meshV1) {
+        nodeListHTML += `<div class="node-item changed" onclick="zoomToByName('${name}')">
+          <span>+ ${name}</span><b>Yeni Obyekt</b>
+        </div>`;
+        changedCount += pos2.count;
+        continue;
+      }
+
+      const pos1 = meshV1.geometry.attributes.position;
+      const minCount = Math.min(pos1.count, pos2.count);
+      let meshChanged = Math.abs(pos1.count - pos2.count);
+
+      const baseColors = new Float32Array(pos2.count * 3).fill(0.7);
+      const newColors = new Float32Array(baseColors.length);
+
+      for (let i = 0; i < pos2.count; i++) {
+        let x1 = pos1.getX(i % minCount);
+        let y1 = pos1.getY(i % minCount);
+        let z1 = pos1.getZ(i % minCount);
+
+        let x2 = pos2.getX(i);
+        let y2 = pos2.getY(i);
+        let z2 = pos2.getZ(i);
+
+        const dist = Math.sqrt((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2);
+
+        if (dist > EPSILON && showHighlight) {
+          const strength = Math.min(dist / 0.3, 1);
+          newColors[i*3]   = HIGHLIGHT_COLOR.r * strength;
+          newColors[i*3+1] = HIGHLIGHT_COLOR.g * strength;
+          newColors[i*3+2] = HIGHLIGHT_COLOR.b * strength;
+          meshChanged++;
+        } else {
+          newColors[i*3] = 0.7; newColors[i*3+1] = 0.7; newColors[i*3+2] = 0.7;
+        }
+      }
+
+      meshV2.geometry.setAttribute('color', new THREE.BufferAttribute(newColors, 3));
+      meshV2.material = meshV2.material.clone();
+      meshV2.material.vertexColors = true;
+      meshV2.material.needsUpdate = true;
+
+      changedCount += meshChanged;
+      const pct = ((meshChanged / pos2.count) * 100).toFixed(1);
+
+      nodeListHTML += `<div class="node-item changed" onclick="zoomToByName('${name}')">
+        <span>${name}</span><b>${pct}% fərq</b>
+      </div>`;
+    }
+
+    scene.add(diffGroup);
+
+    const overallPct = totalCount ? ((changedCount / totalCount) * 100).toFixed(1) : 0;
+    document.getElementById('statChanged').textContent = changedCount;
+    document.getElementById('statPct').textContent = `${overallPct}%`;
+    document.getElementById('nodeList').innerHTML = nodeListHTML || '<div style="font-size:11px;">Fərq tapılmadı.</div>';
+  }
+}
+
+window.zoomToByName = function(name) {
+  scene.traverse((child) => {
+    if (child.isMesh && child.name === name) {
+      focusOnMesh(child);
+    }
+  });
+};
+
+function loadFile(fileInput, isV1) {
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      loader.parse(evt.target.result, '', (gltf) => {
+        if (isV1) {
+          groupV1Raw = gltf.scene;
+          v1MeshesByName = collectMeshes(groupV1Raw);
+          document.getElementById('statV1').textContent = 
+            Object.values(v1MeshesByName).reduce((s, m) => s + m.geometry.attributes.position.count, 0);
+        } else {
+          groupV2Raw = gltf.scene;
+          v2MeshesByName = collectMeshes(groupV2Raw);
+          document.getElementById('statV2').textContent = 
+            Object.values(v2MeshesByName).reduce((s, m) => s + m.geometry.attributes.position.count, 0);
+        }
+        rebuildScene();
+      });
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  if (document.getElementById('toggleSpin').checked) {
+    scene.rotation.y += 0.005;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    activeView = e.target.dataset.view;
+    rebuildScene();
+  });
+});
+
+document.getElementById('toggleGhost').addEventListener('change', rebuildScene);
+document.getElementById('toggleHighlight').addEventListener('change', rebuildScene);
+
+loadFile(document.getElementById('fileV1'), true);
+loadFile(document.getElementById('fileV2'), false);
+
+window.addEventListener('resize', () => {
+  camera.aspect = viewport.clientWidth / viewport.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+});
+</script>
+
+</body>
+</html>
