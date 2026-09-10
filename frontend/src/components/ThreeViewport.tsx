@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DiffPayload, MeshDiffData } from "@/types";
 import { getModelFileUrl } from "@/lib/api";
@@ -20,11 +20,12 @@ interface ThreeViewportProps {
   versionAId: string | null;
   versionBId: string | null;
   diffPayload: DiffPayload | null;
-  /** Bumping this (new name + nonce) briefly flashes a mesh so it's easy to find in 3D. */
-  highlightRequest: { name: string; nonce: number } | null;
+  /** Bumping this flashes a mesh, or — with vertexIndex set — flies the
+   *  camera to that specific vertex and drops a marker on it. */
+  highlightRequest: { name: string; nonce: number; vertexIndex?: number } | null;
 }
 
-type ViewMode = "diff" | "versionB" | "versionA" | "overlay";
+type ViewMode = "versionB" | "versionA" | "overlay";
 
 // Diff colors — plain, flat, no gradients — matching the rest of the UI:
 //   blue   = changed/displaced (still present in both versions)
@@ -34,6 +35,7 @@ const C_UNCHANGED = new THREE.Color(0x94a3b8); // gray — no change
 const C_CHANGED = new THREE.Color(0x2563eb); // blue — displaced / modified
 const C_ADDED = new THREE.Color(0x059669); // green — new geometry
 const GHOST_COLOR = 0xef4444; // red — V1 ghost overlay
+const MARKER_COLOR = 0xf59e0b; // amber — vertex locator, distinct from all diff colors
 
 /** glTF exports occasionally omit vertex normals; without them a lit
  *  material (MeshStandardMaterial) renders solid black regardless of
@@ -42,12 +44,42 @@ function ensureNormals(geom: THREE.BufferGeometry) {
   if (!geom.attributes.normal) geom.computeVertexNormals();
 }
 
+/**
+ * GLTFLoader names every loaded Mesh after its glTF *node*, not its glTF
+ * *mesh* — when a node wraps exactly one mesh (the common case), the node's
+ * name silently overwrites the mesh's own name (see GLTFLoader.js's
+ * `loadNode`, `node.name = nodeName`). The backend's diff, though, identifies
+ * meshes by the glTF *mesh* name (trimesh's `scene.geometry` keys). Whenever
+ * an asset's node name differs from its mesh name — common in real DCC
+ * exports — every name-based lookup on the frontend (added-mesh detection,
+ * per-vertex coloring, click-to-locate) silently fails and the mesh falls
+ * back to looking "unchanged" instead of showing its real diff color.
+ *
+ * Fix: walk `gltf.parser.associations` (which GLTFLoader populates
+ * specifically to map loaded objects back to their glTF definition index)
+ * to recover the true mesh-level name from `gltf.parser.json.meshes[]`, and
+ * use that as the mesh's `.name` everywhere downstream.
+ */
+function resolveGltfMeshNames(gltf: GLTF) {
+  const parser = gltf.parser;
+  const meshDefs = parser?.json?.meshes;
+  if (!parser || !Array.isArray(meshDefs)) return;
+
+  gltf.scene.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const meshIndex = parser.associations.get(mesh)?.meshes;
+    const trueName = meshIndex !== undefined ? meshDefs[meshIndex]?.name : undefined;
+    if (trueName) mesh.name = trueName;
+  });
+}
+
 /** Promise wrapper around GLTFLoader.load so both versions can load in parallel. */
 function loadGLTF(loader: GLTFLoader, url: string) {
-  return new Promise<THREE.Group>((resolve, reject) => {
+  return new Promise<GLTF>((resolve, reject) => {
     loader.load(
       url,
-      (gltf) => resolve(gltf.scene),
+      (gltf) => resolve(gltf),
       undefined,
       (err) => reject(err instanceof Error ? err : new Error(String(err)))
     );
@@ -106,9 +138,8 @@ function buildDiffModel(
     if (!mesh.isMesh) return;
     mesh.geometry = mesh.geometry.clone();
     ensureNormals(mesh.geometry);
-    const name = mesh.name || (mesh.geometry as { name?: string })?.name || "";
-    const meshDiff = meshDiffByName[name];
-    applyDiffColoring(mesh, meshDiff, addedNames.has(name), wireframe);
+    const meshDiff = meshDiffByName[mesh.name];
+    applyDiffColoring(mesh, meshDiff, addedNames.has(mesh.name), wireframe);
   });
   return clone;
 }
@@ -170,6 +201,48 @@ function buildOverlayGhost(sourceModel: THREE.Group): THREE.Group {
   return ghost;
 }
 
+/** Eases the camera + its orbit target toward a world point, preserving the current viewing distance. */
+function flyCameraTo(camera: THREE.PerspectiveCamera, controls: OrbitControls, target: THREE.Vector3, frames = 40) {
+  const startTarget = controls.target.clone();
+  const startPos = camera.position.clone();
+  const direction = startPos.clone().sub(startTarget);
+  const distance = Math.max(direction.length(), 0.3);
+  direction.normalize();
+  const endTarget = target.clone();
+  const endPos = endTarget.clone().add(direction.multiplyScalar(distance));
+
+  let frame = 0;
+  const step = () => {
+    frame++;
+    const t = Math.min(frame / frames, 1);
+    const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+    camera.position.lerpVectors(startPos, endPos, eased);
+    controls.target.lerpVectors(startTarget, endTarget, eased);
+    controls.update();
+    if (t < 1) requestAnimationFrame(step);
+  };
+  step();
+}
+
+/** Finds a mesh's world-space vertex position by name + index, searching the given groups in order. */
+function findVertexWorldPosition(groups: (THREE.Group | null)[], meshName: string, vertexIndex: number): THREE.Vector3 | null {
+  for (const group of groups) {
+    if (!group) continue;
+    let result: THREE.Vector3 | null = null;
+    group.traverse((obj) => {
+      if (result) return;
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || mesh.name !== meshName) return;
+      const pos = mesh.geometry.attributes.position;
+      if (vertexIndex >= pos.count) return;
+      mesh.updateWorldMatrix(true, false);
+      result = new THREE.Vector3().fromBufferAttribute(pos, vertexIndex).applyMatrix4(mesh.matrixWorld);
+    });
+    if (result) return result;
+  }
+  return null;
+}
+
 export const ThreeViewport: React.FC<ThreeViewportProps> = ({
   versionAId,
   versionBId,
@@ -177,7 +250,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
   highlightRequest,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("diff");
+  const [viewMode, setViewMode] = useState<ViewMode>("overlay");
   const [isWireframe, setIsWireframe] = useState(false);
   const [isAutoRotate, setIsAutoRotate] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
@@ -302,11 +375,16 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
 
     (async () => {
       try {
-        const [rawA, rawB] = await Promise.all([
+        const [gltfA, gltfB] = await Promise.all([
           loadGLTF(loader, getModelFileUrl(versionAId)),
           loadGLTF(loader, getModelFileUrl(versionBId)),
         ]);
         if (cancelled) return;
+
+        resolveGltfMeshNames(gltfA);
+        resolveGltfMeshNames(gltfB);
+        const rawA = gltfA.scene;
+        const rawB = gltfB.scene;
 
         [rawA, rawB].forEach((group) =>
           group.traverse((obj) => {
@@ -383,22 +461,51 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
         solidModel = diffModelRef.current;
       }
       if (overlayGhostRef.current) scene.add(overlayGhostRef.current);
-    } else if (diffModelRef.current) {
-      scene.add(diffModelRef.current);
-      solidModel = diffModelRef.current;
     }
 
     setMeshWireframe(solidModel, isWireframe);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode, isWireframe, modelsReady]);
 
-  // ── Flash a mesh by name when the changelog panel asks us to ────────
+  // ── Respond to a changelog click: flash a mesh, or fly to one vertex ────
   useEffect(() => {
     if (!highlightRequest) return;
+    const scene = sceneRef.current;
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+
+    if (highlightRequest.vertexIndex !== undefined) {
+      if (!scene || !camera || !controls) return;
+      const worldPos = findVertexWorldPosition(
+        [diffModelRef.current, modelBRef.current],
+        highlightRequest.name,
+        highlightRequest.vertexIndex
+      );
+      if (!worldPos) return;
+
+      const scale = Math.max(camera.position.distanceTo(controls.target) * 0.015, 0.01);
+      const markerGeo = new THREE.SphereGeometry(scale, 16, 16);
+      const markerMat = new THREE.MeshBasicMaterial({ color: MARKER_COLOR, depthTest: false, transparent: true });
+      const marker = new THREE.Mesh(markerGeo, markerMat);
+      marker.position.copy(worldPos);
+      marker.renderOrder = 1000;
+      scene.add(marker);
+
+      flyCameraTo(camera, controls, worldPos);
+
+      const timer = setTimeout(() => {
+        scene.remove(marker);
+        markerGeo.dispose();
+        markerMat.dispose();
+      }, 1800);
+      return () => clearTimeout(timer);
+    }
+
+    // Plain mesh click: flash the whole mesh white for ~0.7s.
     const targets = [modelARef.current, modelBRef.current, diffModelRef.current].filter(
       (g): g is THREE.Group => Boolean(g && g.parent) // only groups actually in the scene right now
     );
-    const flashMat = new THREE.MeshBasicMaterial({ color: 0x2563eb });
+    const flashMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
     const restore: { obj: THREE.Mesh; mat: THREE.Material | THREE.Material[] }[] = [];
 
     targets.forEach((group) => {
@@ -440,10 +547,9 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
       <div className="absolute top-3.5 left-1/2 -translate-x-1/2 flex gap-1 bg-white/90 backdrop-blur-md border border-[#e2e8f0] rounded-full p-1 shadow-md z-10">
         {(
           [
-            { mode: "diff", label: "Diff", icon: <Zap className="w-3.5 h-3.5" /> },
+            { mode: "overlay", label: "Overlay", icon: <Zap className="w-3.5 h-3.5" /> },
             { mode: "versionA", label: "V1 Base", icon: null },
             { mode: "versionB", label: "V2 Target", icon: null },
-            { mode: "overlay", label: "Overlay", icon: null },
           ] satisfies { mode: ViewMode; label: string; icon: React.ReactNode }[]
         ).map(({ mode, label, icon }) => (
           <button
@@ -532,7 +638,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
               <span className="w-3 h-3 rounded bg-[#94a3b8]" /> Original V2 geometry
             </div>
           )}
-          {(viewMode === "diff" || viewMode === "overlay") && (
+          {viewMode === "overlay" && (
             <>
               <div className="flex items-center gap-2 text-[#334155]">
                 <span className="w-3 h-3 rounded bg-[#94a3b8]" /> Unchanged vertices
@@ -543,12 +649,10 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
               <div className="flex items-center gap-2 text-[#334155]">
                 <span className="w-3 h-3 rounded bg-[#059669]" /> Added geometry
               </div>
+              <div className="flex items-center gap-2 text-[#334155]">
+                <span className="w-3 h-3 rounded bg-[#ef4444]" style={{ opacity: 0.6 }} /> V1 ghost (x-ray, old position)
+              </div>
             </>
-          )}
-          {viewMode === "overlay" && (
-            <div className="flex items-center gap-2 text-[#334155]">
-              <span className="w-3 h-3 rounded bg-[#ef4444]" style={{ opacity: 0.6 }} /> V1 ghost (x-ray, shows old position)
-            </div>
           )}
         </div>
       )}
