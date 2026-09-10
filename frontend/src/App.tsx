@@ -1,61 +1,61 @@
-import { useEffect, useState } from "react";
-import "./App.css";
-import { TableInput } from "./components/TableInput";
-import { ResultsPanel } from "./components/ResultsPanel";
-import { fetchSamples, runAudit } from "./lib/api";
-import type { AuditResponse, LootTable } from "./types";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider } from "./lib/auth";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { LandingPage } from "./pages/LandingPage";
+import { LoginPage } from "./pages/LoginPage";
+import { SignupPage } from "./pages/SignupPage";
+import { DashboardPage } from "./pages/DashboardPage";
+import { NewTablePage } from "./pages/NewTablePage";
+import { TableDetailPage } from "./pages/TableDetailPage";
+import { PricingPage } from "./pages/PricingPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 export default function App() {
-  const [samples, setSamples] = useState<Record<string, LootTable>>({});
-  const [result, setResult] = useState<AuditResponse | null>(null);
-  const [lastTable, setLastTable] = useState<LootTable | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [backendUp, setBackendUp] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    fetchSamples()
-      .then((s) => {
-        setSamples(s);
-        setBackendUp(true);
-      })
-      .catch(() => setBackendUp(false));
-  }, []);
-
-  const handleRun = async (table: LootTable, opts: { num_pulls: number; tolerance: number }) => {
-    setIsRunning(true);
-    setError(null);
-    try {
-      const res = await runAudit(table, opts);
-      setResult(res);
-      setLastTable(table);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Audit failed");
-      setResult(null);
-    } finally {
-      setIsRunning(false);
-    }
-  };
-
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="brand">
-          <div className="brand-logo">LT</div>
-          <div>
-            <div className="brand-title">Loot Table Balance Auditor</div>
-            <div className="brand-sub">Validate configs, simulate real odds, catch compliance drift</div>
-          </div>
-        </div>
-        <div className={`backend-status ${backendUp ? "up" : backendUp === false ? "down" : ""}`}>
-          {backendUp === null ? "Connecting..." : backendUp ? "API connected" : "API unreachable (start the backend on :8000)"}
-        </div>
-      </header>
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
 
-      <main className="app-main">
-        <TableInput samples={samples} onRun={handleRun} isRunning={isRunning} error={error} />
-        <ResultsPanel result={result} isRunning={isRunning} table={lastTable} />
-      </main>
-    </div>
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tables/new"
+            element={
+              <ProtectedRoute>
+                <NewTablePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tables/:id"
+            element={
+              <ProtectedRoute>
+                <TableDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }

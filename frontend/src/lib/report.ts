@@ -1,13 +1,13 @@
-import type { AuditResponse, LootTable } from "../types";
+import type { AuditRunOut, LootTable } from "../types";
 
 /** Builds a plain-text compliance report and triggers a browser download. */
-export function downloadComplianceReport(table: LootTable, result: AuditResponse) {
+export function downloadComplianceReport(table: LootTable, result: AuditRunOut) {
   const lines: string[] = [];
-  const now = new Date().toISOString();
 
   lines.push(`LOOT TABLE COMPLIANCE REPORT`);
   lines.push(`Table: ${table.table_id}`);
-  lines.push(`Generated: ${now}`);
+  lines.push(`Audit run: ${result.id}`);
+  lines.push(`Generated: ${result.created_at}`);
   lines.push("");
 
   if (result.validation_issues.length === 0) {
@@ -25,7 +25,9 @@ export function downloadComplianceReport(table: LootTable, result: AuditResponse
   } else if (result.compliance && result.simulation) {
     lines.push(`Overall Compliance: ${result.compliance.overall_status.toUpperCase()}`);
     lines.push(`Simulated pulls: ${result.simulation.num_pulls.toLocaleString()}`);
-    lines.push(`Tolerance: +/- ${(result.compliance.tolerance * 100).toFixed(2)} percentage points (or 3 sampling standard errors, whichever is larger)`);
+    lines.push(
+      `Tolerance: +/- ${(result.compliance.tolerance * 100).toFixed(2)} percentage points (or 3 sampling standard errors, whichever is larger)`
+    );
     lines.push("");
     lines.push("Item Compliance:");
     for (const f of result.compliance.item_flags) {

@@ -1,4 +1,13 @@
-import type { AuditResponse, LootTable } from "../types";
+import type {
+  AuditRunOut,
+  AuthResponse,
+  LootTable,
+  Plan,
+  PlanLimits,
+  TableDetail,
+  TableSummary,
+  User,
+} from "../types";
 
 const getApiBase = () => {
   if (typeof window !== "undefined") {
@@ -7,24 +16,84 @@ const getApiBase = () => {
   return "http://localhost:8000";
 };
 
-export async function fetchSamples(): Promise<Record<string, LootTable>> {
-  const res = await fetch(`${getApiBase()}/samples`);
-  if (!res.ok) throw new Error("Failed to fetch sample tables");
-  return res.json();
+const TOKEN_KEY = "loot_auditor_token";
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+export function setToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+export function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
 }
 
-export async function runAudit(
-  table: LootTable,
-  opts: { num_pulls?: number; tolerance?: number; seed?: number } = {}
-): Promise<AuditResponse> {
-  const res = await fetch(`${getApiBase()}/audit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ table, ...opts }),
-  });
+async function request<T>(path: string, opts: RequestInit = {}, auth = true): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...(opts.headers as Record<string, string>) };
+  if (auth) {
+    const token = getToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+  const res = await fetch(`${getApiBase()}${path}`, { ...opts, headers });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(body.detail || `HTTP ${res.status}`);
   }
+  if (res.status === 204) return undefined as T;
   return res.json();
+}
+
+// ── Public ───────────────────────────────────────────────────────────────
+
+export function fetchSamples(): Promise<Record<string, LootTable>> {
+  return request("/samples", {}, false);
+}
+
+export function fetchPlans(): Promise<Record<Plan, PlanLimits>> {
+  return request("/plans", {}, false);
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────
+
+export function signup(email: string, password: string): Promise<AuthResponse> {
+  return request("/auth/signup", { method: "POST", body: JSON.stringify({ email, password }) }, false);
+}
+
+export function login(email: string, password: string): Promise<AuthResponse> {
+  return request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }, false);
+}
+
+export function fetchMe(): Promise<User> {
+  return request("/user/me");
+}
+
+// ── Loot tables ──────────────────────────────────────────────────────────
+
+export function fetchTables(): Promise<TableSummary[]> {
+  return request("/tables");
+}
+
+export function createTable(name: string, table: LootTable): Promise<TableDetail> {
+  return request("/tables", { method: "POST", body: JSON.stringify({ name, table }) });
+}
+
+export function fetchTable(id: string): Promise<TableDetail> {
+  return request(`/tables/${id}`);
+}
+
+export function deleteTable(id: string): Promise<void> {
+  return request(`/tables/${id}`, { method: "DELETE" });
+}
+
+// ── Audit ────────────────────────────────────────────────────────────────
+
+export function runAudit(
+  tableId: string,
+  opts: { num_pulls?: number; tolerance?: number; seed?: number } = {}
+): Promise<AuditRunOut> {
+  return request(`/tables/${tableId}/audit`, { method: "POST", body: JSON.stringify(opts) });
+}
+
+export function fetchHistory(tableId: string): Promise<AuditRunOut[]> {
+  return request(`/tables/${tableId}/history`);
 }

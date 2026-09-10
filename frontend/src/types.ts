@@ -71,9 +71,52 @@ export interface ComplianceReport {
   overall_status: FlagStatus;
 }
 
-export interface AuditResponse {
+// AuditRunOut from the backend -- same shape as the old stateless
+// AuditResponse plus persistence fields (id, created_at).
+export interface AuditRunOut {
+  id: string;
   validation_issues: Issue[];
   blocked: boolean;
   simulation: SimulationResult | null;
   compliance: ComplianceReport | null;
+  created_at: string;
+}
+
+// ── Multi-user / SaaS shapes ────────────────────────────────────────────
+
+export type Plan = "free" | "studio" | "enterprise";
+
+export interface PlanLimits {
+  max_tables: number | null;
+  max_pulls: number;
+  export: boolean;
+  full_history: boolean;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  plan: Plan;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  user: User;
+}
+
+export interface TableSummary {
+  id: string;
+  name: string;
+  table_id: string;
+  created_at: string;
+  updated_at: string;
+  last_status: FlagStatus | "blocked" | null;
+}
+
+export interface TableDetail {
+  id: string;
+  name: string;
+  table: LootTable;
+  created_at: string;
+  updated_at: string;
 }
