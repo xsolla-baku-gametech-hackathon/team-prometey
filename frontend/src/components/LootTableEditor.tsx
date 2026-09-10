@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "./ui/Button";
 import { Badge } from "./ui/Badge";
 import { Textarea } from "./ui/Input";
-import type { Item, LootTable } from "../types";
+import type { Item, LootTable, Pity } from "../types";
 
 const CELL_INPUT =
   "w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-[13px] text-ink outline-none " +
@@ -64,6 +64,23 @@ export const LootTableEditor: React.FC<{ jsonText: string; onChange: (text: stri
     const nextRates = { ...parsed.advertised_rates };
     delete nextRates[id];
     commitTable({ ...parsed, items: parsed.items.filter((it) => it.id !== id), advertised_rates: nextRates });
+  };
+
+  const pity: Pity | null = parsed?.pity ?? null;
+
+  const togglePity = (enabled: boolean) => {
+    if (!parsed) return;
+    commitTable({
+      ...parsed,
+      pity: enabled
+        ? { target_rarity: items[0]?.rarity ?? "", guaranteed_within_pulls: 90, reset_on_trigger: true }
+        : null,
+    });
+  };
+
+  const updatePity = (patch: Partial<Pity>) => {
+    if (!parsed || !parsed.pity) return;
+    commitTable({ ...parsed, pity: { ...parsed.pity, ...patch } });
   };
 
   const handleAddItem = () => {
@@ -246,6 +263,48 @@ export const LootTableEditor: React.FC<{ jsonText: string; onChange: (text: stri
           </>
         )}
       </div>
+
+      {!parseError && (
+        <div className="flex flex-col gap-2.5">
+          <label className="flex items-center gap-2 text-[13px] font-medium text-ink-muted cursor-pointer w-fit">
+            <input type="checkbox" checked={pity !== null} onChange={(e) => togglePity(e.target.checked)} className="accent-accent" />
+            Pity timer
+          </label>
+          {pity && (
+            <div className="flex flex-wrap items-end gap-2 bg-bg border border-line rounded-lg p-3">
+              <div className="flex flex-col gap-1 flex-1 min-w-[110px]">
+                <span className="text-[11px] text-ink-muted">Target rarity</span>
+                <input
+                  className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+                  value={pity.target_rarity}
+                  onChange={(e) => updatePity({ target_rarity: e.target.value })}
+                  placeholder="legendary"
+                />
+              </div>
+              <div className="flex flex-col gap-1 w-40">
+                <span className="text-[11px] text-ink-muted">Guaranteed within pulls</span>
+                <input
+                  type="number"
+                  min={1}
+                  step="1"
+                  className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+                  value={pity.guaranteed_within_pulls}
+                  onChange={(e) => updatePity({ guaranteed_within_pulls: Number(e.target.value) })}
+                />
+              </div>
+              <label className="flex items-center gap-2 text-[13px] text-ink pb-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={pity.reset_on_trigger}
+                  onChange={(e) => updatePity({ reset_on_trigger: e.target.checked })}
+                  className="accent-accent"
+                />
+                Reset counter on trigger
+              </label>
+            </div>
+          )}
+        </div>
+      )}
 
       <Textarea label="Loot table JSON" value={jsonText} onChange={(e) => onChange(e.target.value)} rows={14} spellCheck={false} />
     </div>
