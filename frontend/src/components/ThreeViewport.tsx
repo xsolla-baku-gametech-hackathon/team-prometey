@@ -6,15 +6,7 @@ import { GLTFLoader, GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { DiffPayload, MeshDiffData } from "@/types";
 import { getModelFileUrl } from "@/lib/api";
-import {
-  RotateCcw,
-  Grid,
-  Eye,
-  Layers,
-  Compass,
-  Loader2,
-  Zap,
-} from "lucide-react";
+import { RotateCcw, Layers, Loader2 } from "lucide-react";
 
 interface ThreeViewportProps {
   versionAId: string | null;
@@ -646,87 +638,73 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
     if (controlsRef.current) controlsRef.current.reset();
   };
 
+  const toggle = (label: string, checked: boolean, onChange: (v: boolean) => void) => (
+    <label className="flex items-center gap-1.5 text-xs font-medium text-[#64748b] cursor-pointer select-none whitespace-nowrap">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="accent-[#2563eb] cursor-pointer"
+      />
+      {label}
+    </label>
+  );
+
   return (
-    <div className="relative flex-1 h-full w-full bg-[#f8fafc] overflow-hidden">
-      {/* Viewport Toolbar */}
-      <div className="absolute top-3.5 left-1/2 -translate-x-1/2 flex gap-1 bg-white/90 backdrop-blur-md border border-[#e2e8f0] rounded-full p-1 shadow-md z-10">
-        {(
-          [
-            { mode: "overlay", label: "Overlay", icon: <Zap className="w-3.5 h-3.5" /> },
-            { mode: "versionA", label: "V1 Base", icon: null },
-            { mode: "versionB", label: "V2 Target", icon: null },
-          ] satisfies { mode: ViewMode; label: string; icon: React.ReactNode }[]
-        ).map(({ mode, label, icon }) => (
-          <button
-            key={mode}
-            onClick={() => setViewMode(mode)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
-              viewMode === mode ? "bg-[#2563eb] text-white" : "text-[#64748b] hover:text-[#0f172a]"
-            }`}
-          >
-            <span className="flex items-center gap-1.5">
-              {icon}
+    <div className="flex flex-col flex-1 h-full w-full overflow-hidden">
+      {/* Docked toolbar: view tabs on the left, morph slider + toggles on the right */}
+      <div className="h-[50px] flex-shrink-0 bg-white border-b border-[#e2e8f0] flex items-center justify-between gap-4 px-4">
+        <div className="flex bg-[#f8fafc] p-0.5 rounded-lg border border-[#e2e8f0] flex-shrink-0">
+          {(
+            [
+              { mode: "overlay", label: "Overlay" },
+              { mode: "versionA", label: "V1 Base" },
+              { mode: "versionB", label: "V2 Target" },
+            ] satisfies { mode: ViewMode; label: string }[]
+          ).map(({ mode, label }) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                viewMode === mode ? "bg-white text-[#2563eb] shadow-sm" : "text-[#64748b] hover:text-[#0f172a]"
+              }`}
+            >
               {label}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* V1 <-> V2 morph slider — only meaningful when both are on screen */}
-      {viewMode === "overlay" && diffPayload && (
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 flex items-center gap-2.5 bg-white/90 backdrop-blur-md border border-[#e2e8f0] rounded-full px-4 py-1.5 shadow-md z-10">
-          <span className="text-[10px] font-semibold text-[#64748b] whitespace-nowrap">V1</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={morphValue * 100}
-            onChange={(e) => setMorphValue(Number(e.target.value) / 100)}
-            className="w-36 accent-[#2563eb] cursor-pointer"
-            title="Scrub between V1 and V2"
-          />
-          <span className="text-[10px] font-semibold text-[#64748b] whitespace-nowrap">V2</span>
+            </button>
+          ))}
         </div>
-      )}
 
-      {/* Quick Tools */}
-      <div className="absolute top-3.5 right-3.5 flex flex-col gap-1.5 z-10">
-        <button
-          onClick={resetCamera}
-          className="w-8 h-8 rounded-lg bg-white/90 backdrop-blur-md border border-[#e2e8f0] text-[#64748b] hover:text-[#0f172a] hover:border-[#93c5fd] flex items-center justify-center transition-colors shadow-sm"
-          title="Reset Camera"
-        >
-          <RotateCcw className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => setIsWireframe(!isWireframe)}
-          className={`w-8 h-8 rounded-lg bg-white/90 backdrop-blur-md border flex items-center justify-center transition-colors shadow-sm ${
-            isWireframe ? "text-[#2563eb] border-[#2563eb] bg-[#eff6ff]" : "text-[#64748b] border-[#e2e8f0] hover:text-[#0f172a]"
-          }`}
-          title="Toggle Wireframe"
-        >
-          <Eye className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => setIsAutoRotate(!isAutoRotate)}
-          className={`w-8 h-8 rounded-lg bg-white/90 backdrop-blur-md border flex items-center justify-center transition-colors shadow-sm ${
-            isAutoRotate ? "text-[#2563eb] border-[#2563eb] bg-[#eff6ff]" : "text-[#64748b] border-[#e2e8f0] hover:text-[#0f172a]"
-          }`}
-          title="Auto Rotate"
-        >
-          <Compass className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => setShowGrid(!showGrid)}
-          className={`w-8 h-8 rounded-lg bg-white/90 backdrop-blur-md border flex items-center justify-center transition-colors shadow-sm ${
-            showGrid ? "text-[#2563eb] border-[#2563eb] bg-[#eff6ff]" : "text-[#64748b] border-[#e2e8f0] hover:text-[#0f172a]"
-          }`}
-          title="Toggle Grid"
-        >
-          <Grid className="w-4 h-4" />
-        </button>
+        {viewMode === "overlay" && diffPayload && (
+          <div className="flex items-center gap-2.5 flex-1 justify-center min-w-0">
+            <span className="text-[11px] font-semibold text-[#64748b] whitespace-nowrap">V1 → V2</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={morphValue * 100}
+              onChange={(e) => setMorphValue(Number(e.target.value) / 100)}
+              className="w-full max-w-[220px] accent-[#2563eb] cursor-pointer"
+              title="Scrub between V1 and V2"
+            />
+          </div>
+        )}
+
+        <div className="flex items-center gap-4 flex-shrink-0">
+          {toggle("Wireframe", isWireframe, setIsWireframe)}
+          {toggle("Auto Rotate", isAutoRotate, setIsAutoRotate)}
+          {toggle("Grid", showGrid, setShowGrid)}
+          <button
+            onClick={resetCamera}
+            className="w-7 h-7 rounded-md text-[#64748b] hover:text-[#2563eb] hover:bg-[#eff6ff] flex items-center justify-center transition-colors flex-shrink-0"
+            title="Reset Camera"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
+      {/* Viewport */}
+      <div className="relative flex-1 w-full bg-[#f8fafc] overflow-hidden">
       {/* WebGL Canvas */}
       <div ref={containerRef} className="w-full h-full" />
 
@@ -789,6 +767,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
           </p>
         </div>
       )}
+      </div>
     </div>
   );
 };
