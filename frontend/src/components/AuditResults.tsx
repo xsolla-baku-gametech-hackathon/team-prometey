@@ -75,40 +75,41 @@ export const AuditResults: React.FC<{ result: AuditRunOut; table: LootTable; can
         <>
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted mb-2.5">Item Compliance</div>
-            <div className="border border-line rounded-lg overflow-hidden">
-              <table className="w-full text-[13px] tabular-nums">
-                <thead>
-                  <tr className="bg-bg text-[11px] font-medium uppercase tracking-[0.08em] text-ink-muted">
-                    <th className="text-left px-3.5 py-2.5">Item</th>
-                    <th className="text-left px-3.5 py-2.5">Advertised</th>
-                    <th className="text-left px-3.5 py-2.5">Simulated</th>
-                    <th className="text-left px-3.5 py-2.5">Delta</th>
-                    <th className="text-left px-3.5 py-2.5">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-divider">
-                  {compliance.item_flags.map((f) => (
-                    <tr key={f.item_id}>
-                      <td className="px-3.5 py-2.5 font-medium">{f.item_id}</td>
-                      <td className="px-3.5 py-2.5 text-ink-muted">{(f.advertised_rate * 100).toFixed(2)}%</td>
-                      <td className="px-3.5 py-2.5 text-ink-muted">{(f.simulated_rate * 100).toFixed(2)}%</td>
-                      <td className={`px-3.5 py-2.5 ${f.delta > 0 ? "text-success" : f.delta < 0 ? "text-danger" : "text-ink-muted"}`}>
-                        {f.delta >= 0 ? "+" : ""}
-                        {(f.delta * 100).toFixed(3)} pp
-                      </td>
-                      <td className="px-3.5 py-2.5">
-                        <Badge tone={STATUS_TONE[f.status]} solid>
-                          {f.status}
-                        </Badge>
-                      </td>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+              <div className="border border-line rounded-lg overflow-hidden">
+                <table className="w-full text-[13px] tabular-nums">
+                  <thead>
+                    <tr className="bg-bg text-[11px] font-medium uppercase tracking-[0.08em] text-ink-muted">
+                      <th className="text-left px-3.5 py-2.5">Item</th>
+                      <th className="text-left px-3.5 py-2.5">Advertised</th>
+                      <th className="text-left px-3.5 py-2.5">Simulated</th>
+                      <th className="text-left px-3.5 py-2.5">Delta</th>
+                      <th className="text-left px-3.5 py-2.5">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-divider">
+                    {compliance.item_flags.map((f) => (
+                      <tr key={f.item_id}>
+                        <td className="px-3.5 py-2.5 font-medium">{f.item_id}</td>
+                        <td className="px-3.5 py-2.5 text-ink-muted">{(f.advertised_rate * 100).toFixed(2)}%</td>
+                        <td className="px-3.5 py-2.5 text-ink-muted">{(f.simulated_rate * 100).toFixed(2)}%</td>
+                        <td className={`px-3.5 py-2.5 ${f.delta > 0 ? "text-success" : f.delta < 0 ? "text-danger" : "text-ink-muted"}`}>
+                          {f.delta >= 0 ? "+" : ""}
+                          {(f.delta * 100).toFixed(3)} pp
+                        </td>
+                        <td className="px-3.5 py-2.5">
+                          <Badge tone={STATUS_TONE[f.status]} solid>
+                            {f.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <RateChart flags={compliance.item_flags} />
             </div>
           </div>
-
-          <RateChart flags={compliance.item_flags} />
 
           {compliance.pity_flag && (
             <div>
@@ -118,15 +119,12 @@ export const AuditResults: React.FC<{ result: AuditRunOut; table: LootTable; can
                   {compliance.pity_flag.status}
                 </Badge>
               </div>
-              <p className="text-[13px] leading-[1.6] text-ink-muted mb-3 max-w-[600px]">{compliance.pity_flag.message}</p>
-              {simulation.pity && <PityChart pity={simulation.pity} />}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-center">
+                <p className="text-[13px] leading-[1.6] text-ink-muted">{compliance.pity_flag.message}</p>
+                {simulation.pity && <PityChart pity={simulation.pity} />}
+              </div>
             </div>
           )}
-
-          <p className="text-[12px] text-ink-muted">
-            {simulation.num_pulls.toLocaleString()} pulls simulated
-            {simulation.pity ? ` -- ${simulation.pity.forced_hits.toLocaleString()} pity saves` : ""}.
-          </p>
         </>
       )}
     </div>
