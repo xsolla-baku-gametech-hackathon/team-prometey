@@ -248,6 +248,12 @@ export default function Home() {
           vertexColors: true,
           roughness: 0.6,
           metalness: 0.05,
+          // V2 renders as itself -- solid and opaque. Only V1 (above) is the
+          // translucent x-ray ghost; V2 must never be see-through like it.
+          transparent: false,
+          opacity: 1,
+          depthWrite: true,
+          depthTest: true,
         });
 
         changedCount += meshChanged;
