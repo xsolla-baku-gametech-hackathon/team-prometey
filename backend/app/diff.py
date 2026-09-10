@@ -209,15 +209,23 @@ def _diff_geometry(
         result["unchanged"] = False
         meshes.append(result)
 
-    # Added/removed meshes are entirely different geometry (100% changed) --
-    # their vertices must count toward the totals too, or an asset where a
-    # whole new mesh was added would silently under-report how much changed.
+    # total_vertices/total_changed_vertices describe V2 -- the version
+    # actually rendered in the viewport -- so the percentage means "how much
+    # of what you're looking at right now is different from before":
+    #   - matched meshes contribute their real vertex/changed counts.
+    #   - added meshes are entirely new geometry (100% changed) and DO exist
+    #     in V2, so they count toward both total and changed.
+    #   - removed meshes do NOT exist in V2 at all -- folding their vertices
+    #     into this ratio would count vertices you can never actually see in
+    #     the diff view, and could even overstate "changed" beyond what's
+    #     rendered. They're still fully reported, just separately, via
+    #     removed_meshes.
     matched_total = sum(m["vertex_count"] for m in meshes)
     matched_changed = sum(m["changed_vertex_count"] for m in meshes)
-    added_removed_total = sum(m["vertex_count"] for m in added) + sum(m["vertex_count"] for m in removed)
+    added_total = sum(m["vertex_count"] for m in added)
 
-    total_vertices = matched_total + added_removed_total
-    total_changed = matched_changed + added_removed_total
+    total_vertices = matched_total + added_total
+    total_changed = matched_changed + added_total
 
     return {
         "added_meshes": added,
