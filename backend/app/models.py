@@ -19,6 +19,7 @@ from sqlalchemy import (
     Column,
     String,
     DateTime,
+    Float,
     ForeignKey,
     Text,
     Boolean,
@@ -83,6 +84,11 @@ class DiffResult(Base):
     version_b_id = Column(String, ForeignKey("asset_versions.id"), nullable=False)
 
     computed_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    # The epsilon this diff was computed with. Part of the cache key: a
+    # cached diff computed at a coarser/finer threshold is a different
+    # result, not a valid cache hit for a new epsilon.
+    epsilon = Column(Float, nullable=False, default=1e-4)
 
     # Full diff payload (materials/hierarchy/geometry summary) as JSON text.
     # Kept as a single JSON blob — simplest possible storage for a weekend

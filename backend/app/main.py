@@ -20,6 +20,7 @@ import json
 import os
 import shutil
 
+import sqlalchemy
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -167,12 +168,19 @@ def compute_diff(
     if not (version_a.is_extracted and version_b.is_extracted):
         raise HTTPException(409, "Both versions must finish extraction before diffing.")
 
-    # Cache hit: return the existing diff instead of recomputing (either order).
+    # Cache hit: return the existing diff instead of recomputing (either
+    # order), but only if it was computed with the same epsilon -- a diff
+    # computed at a different noise threshold is a different result, and
+    # silently returning it would contradict the "never silently give a
+    # wrong answer" requirement.
     existing = (
         db.query(DiffResult)
         .filter(
-            ((DiffResult.version_a_id == version_a_id) & (DiffResult.version_b_id == version_b_id))
-            | ((DiffResult.version_a_id == version_b_id) & (DiffResult.version_b_id == version_a_id))
+            (
+                ((DiffResult.version_a_id == version_a_id) & (DiffResult.version_b_id == version_b_id))
+                | ((DiffResult.version_a_id == version_b_id) & (DiffResult.version_b_id == version_a_id))
+            )
+            & (sqlalchemy.func.abs(DiffResult.epsilon - epsilon) < 1e-12)
         )
         .first()
     )
@@ -193,6 +201,7 @@ def compute_diff(
     diff = DiffResult(
         version_a_id=version_a_id,
         version_b_id=version_b_id,
+        epsilon=epsilon,
         diff_json=json.dumps(diff_payload),
         geometry_exact=diff_payload["geometry"]["geometry_exact"],
     )
@@ -249,6 +258,7 @@ def _diff_out(diff: DiffResult) -> dict:
         "version_a_id": diff.version_a_id,
         "version_b_id": diff.version_b_id,
         "computed_at": diff.computed_at.isoformat(),
+        "epsilon": diff.epsilon,
         "geometry_exact": diff.geometry_exact,
         "diff": json.loads(diff.diff_json),
     }
