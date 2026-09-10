@@ -77,7 +77,7 @@ export const TableDetailPage: React.FC = () => {
 
   return (
     <AppShell>
-      <div className="max-w-3xl mx-auto px-8 py-10">
+      <div className="max-w-6xl mx-auto px-8 py-10">
         <div className="flex items-start justify-between mb-2">
           <div>
             <h1 className="text-[28px] font-semibold tracking-[-0.5px] text-ink">{detail.name}</h1>
