@@ -1,11 +1,11 @@
 import React from "react";
-import { Download } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 import type { AuditRunOut, LootTable } from "../types";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { RateChart } from "./RateChart";
 import { PityChart } from "./PityChart";
-import { downloadComplianceReport } from "../lib/report";
+import { downloadComplianceReportCsv, openPrintableComplianceReport } from "../lib/report";
 
 const STATUS_TONE: Record<string, "green" | "yellow" | "red"> = { green: "green", yellow: "yellow", red: "red" };
 const STATUS_LABEL: Record<string, string> = { green: "Compliant", yellow: "Borderline", red: "Non-Compliant" };
@@ -33,9 +33,14 @@ export const AuditResults: React.FC<{ result: AuditRunOut; table: LootTable; can
         <span className="text-[12px] text-ink-muted">{new Date(result.created_at).toLocaleString()}</span>
         <div className="flex-1" />
         {canExport && (
-          <Button variant="secondary" onClick={() => downloadComplianceReport(table, result)} className="!py-1.5 !text-[13px]">
-            <Download className="w-3.5 h-3.5" /> Export Report
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={() => downloadComplianceReportCsv(table, result)} className="!py-1.5 !text-[13px]">
+              <Download className="w-3.5 h-3.5" /> CSV
+            </Button>
+            <Button variant="secondary" onClick={() => openPrintableComplianceReport(table, result)} className="!py-1.5 !text-[13px]">
+              <Printer className="w-3.5 h-3.5" /> PDF
+            </Button>
+          </div>
         )}
       </div>
 
