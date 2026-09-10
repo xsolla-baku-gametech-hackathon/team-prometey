@@ -116,9 +116,14 @@ function setMeshWireframe(group: THREE.Object3D | null, wireframe: boolean) {
  *   - mesh unchanged (content hash match) or vertex within epsilon -> gray
  *   - vertex displaced beyond epsilon, or mesh with a topology change
  *     (no per-vertex correspondence available) -> solid blue
+ *
+ * Also stashes each matched mesh's V1/V2 position buffers in userData
+ * (morphV1/morphV2) when vertex counts line up, so the morph slider can
+ * interpolate between them without needing to re-derive anything later.
  */
 function buildDiffModel(
   rawModelB: THREE.Group,
+  rawModelA: THREE.Group,
   diffPayload: DiffPayload,
   wireframe: boolean
 ): THREE.Group {
@@ -127,6 +132,12 @@ function buildDiffModel(
     meshDiffByName[m.mesh_name] = m;
   });
   const addedNames = new Set(diffPayload.geometry.added_meshes.map((m) => m.mesh_name));
+
+  const meshesA: Record<string, THREE.Mesh> = {};
+  rawModelA.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (mesh.isMesh) meshesA[mesh.name] = mesh;
+  });
 
   // `Object3D.clone(true)` deep-clones the *hierarchy* only — three.js
   // does NOT clone geometry or material buffers, so without an explicit
@@ -140,6 +151,14 @@ function buildDiffModel(
     ensureNormals(mesh.geometry);
     const meshDiff = meshDiffByName[mesh.name];
     applyDiffColoring(mesh, meshDiff, addedNames.has(mesh.name), wireframe);
+
+    const meshA = meshesA[mesh.name];
+    const posB = mesh.geometry.attributes.position;
+    const posA = meshA?.geometry.attributes.position;
+    if (posA && posA.count === posB.count) {
+      mesh.userData.morphV1 = Float32Array.from(posA.array as ArrayLike<number>);
+      mesh.userData.morphV2 = Float32Array.from(posB.array as ArrayLike<number>);
+    }
   });
   return clone;
 }
@@ -179,7 +198,47 @@ function applyDiffColoring(
     roughness: 0.6,
     metalness: 0.05,
     wireframe,
+    transparent: true, // opacity is driven live by the morph slider
   });
+}
+
+/**
+ * Scrubs between V1 and V2: interpolates each matched mesh's vertex
+ * positions (morphValue 0 = V1, 1 = V2) and fades the ghost/diff opacity
+ * in step, so dragging the slider reads as "watching the edit happen."
+ * Meshes without a stashed morphV1/morphV2 (topology mismatch, or no V1
+ * counterpart) don't move -- they only fade.
+ */
+function applyMorph(diffModel: THREE.Group | null, ghostModel: THREE.Group | null, morphValue: number) {
+  if (ghostModel) {
+    const ghostOpacity = (1 - morphValue) * 0.4 + 0.1;
+    ghostModel.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      (mesh.material as THREE.MeshBasicMaterial).opacity = ghostOpacity;
+    });
+  }
+
+  if (diffModel) {
+    const diffOpacity = Math.max(morphValue, 0.2);
+    diffModel.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      (mesh.material as THREE.MeshStandardMaterial).opacity = diffOpacity;
+
+      const v1 = mesh.userData.morphV1 as Float32Array | undefined;
+      const v2 = mesh.userData.morphV2 as Float32Array | undefined;
+      if (!v1 || !v2) return;
+
+      const posAttr = mesh.geometry.attributes.position as THREE.BufferAttribute;
+      const arr = posAttr.array as Float32Array;
+      for (let i = 0; i < arr.length; i++) {
+        arr[i] = v1[i] + (v2[i] - v1[i]) * morphValue;
+      }
+      posAttr.needsUpdate = true;
+      mesh.geometry.computeVertexNormals();
+    });
+  }
 }
 
 /** Clone of modelA rendered as a semi-transparent x-ray ghost, for Overlay mode. */
@@ -272,6 +331,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("overlay");
+  const [morphValue, setMorphValue] = useState(1); // 0 = V1, 1 = V2
   const [isWireframe, setIsWireframe] = useState(false);
   const [isAutoRotate, setIsAutoRotate] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
@@ -423,7 +483,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
 
         modelARef.current = rawA;
         modelBRef.current = rawB;
-        diffModelRef.current = buildDiffModel(rawB, diffPayload, isWireframe);
+        diffModelRef.current = buildDiffModel(rawB, rawA, diffPayload, isWireframe);
         overlayGhostRef.current = buildOverlayGhost(rawA);
 
         // Frame the camera on V2 (the target/newer version).
@@ -487,6 +547,18 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
     setMeshWireframe(solidModel, isWireframe);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode, isWireframe, modelsReady]);
+
+  // ── V1 ↔ V2 morph slider: interpolate positions + fade ghost/diff opacity ──
+  useEffect(() => {
+    applyMorph(diffModelRef.current, overlayGhostRef.current, morphValue);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [morphValue, modelsReady]);
+
+  // Reset to "fully V2" whenever a new diff loads, rather than carrying over
+  // whatever position a previous asset's slider was left at.
+  useEffect(() => {
+    setMorphValue(1);
+  }, [versionAId, versionBId]);
 
   // ── Respond to a changelog click: flash a mesh, or fly to one vertex ────
   useEffect(() => {
@@ -599,6 +671,23 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
           </button>
         ))}
       </div>
+
+      {/* V1 <-> V2 morph slider — only meaningful when both are on screen */}
+      {viewMode === "overlay" && diffPayload && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 flex items-center gap-2.5 bg-white/90 backdrop-blur-md border border-[#e2e8f0] rounded-full px-4 py-1.5 shadow-md z-10">
+          <span className="text-[10px] font-semibold text-[#64748b] whitespace-nowrap">V1</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={morphValue * 100}
+            onChange={(e) => setMorphValue(Number(e.target.value) / 100)}
+            className="w-36 accent-[#2563eb] cursor-pointer"
+            title="Scrub between V1 and V2"
+          />
+          <span className="text-[10px] font-semibold text-[#64748b] whitespace-nowrap">V2</span>
+        </div>
+      )}
 
       {/* Quick Tools */}
       <div className="absolute top-3.5 right-3.5 flex flex-col gap-1.5 z-10">
