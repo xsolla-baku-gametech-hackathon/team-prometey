@@ -7,6 +7,7 @@ import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { AuditResults } from "../components/AuditResults";
 import { LootTableEditor } from "../components/LootTableEditor";
+import { CompareRuns } from "../components/CompareRuns";
 import { deleteTable, fetchHistory, fetchPlans, fetchTable, runAudit, updateTable } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { AuditRunOut, LootTable, PlanLimits, TableDetail } from "../types";
@@ -21,6 +22,7 @@ export const TableDetailPage: React.FC = () => {
   const [result, setResult] = useState<AuditRunOut | null>(null);
   const [history, setHistory] = useState<AuditRunOut[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -210,16 +212,29 @@ export const TableDetailPage: React.FC = () => {
         )}
 
         {!isEditing && history.length > 1 && (
-          <div>
-            <button
-              onClick={() => setShowHistory((v) => !v)}
-              className="flex items-center gap-1.5 text-[13px] font-medium text-ink-muted hover:text-ink cursor-pointer mb-3"
-            >
-              <ChevronDown className={`w-4 h-4 transition-transform ${showHistory ? "rotate-180" : ""}`} />
-              {limits?.full_history
-                ? `History (${history.length} runs)`
-                : "Full history requires the Studio or Enterprise plan"}
-            </button>
+          <div className="mb-6">
+            <div className="flex items-center gap-4 mb-3">
+              <button
+                onClick={() => setShowHistory((v) => !v)}
+                className="flex items-center gap-1.5 text-[13px] font-medium text-ink-muted hover:text-ink cursor-pointer"
+              >
+                <ChevronDown className={`w-4 h-4 transition-transform ${showHistory ? "rotate-180" : ""}`} />
+                {limits?.full_history
+                  ? `History (${history.length} runs)`
+                  : "Full history requires the Studio or Enterprise plan"}
+              </button>
+              {limits?.full_history && (
+                <button
+                  onClick={() => setShowCompare((v) => !v)}
+                  className={`text-[13px] font-medium cursor-pointer ${showCompare ? "text-accent" : "text-ink-muted hover:text-ink"}`}
+                >
+                  Compare runs
+                </button>
+              )}
+            </div>
+
+            {showCompare && limits?.full_history && <CompareRuns runs={history} />}
+
             {showHistory && limits?.full_history && (
               <div className="flex flex-col gap-2">
                 {history.map((run) => (
