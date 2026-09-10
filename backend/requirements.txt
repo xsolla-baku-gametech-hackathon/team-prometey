@@ -1,0 +1,4 @@
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+numpy==2.5.3
+pytest==9.1.1
