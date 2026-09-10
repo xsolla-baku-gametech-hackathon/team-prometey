@@ -260,7 +260,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <div className="font-semibold text-gray-200">
                         {d.geometry_exact ? "✓ Exact Match" : "≈ Approx Match"}
                       </div>
-                      <div className="text-[10px] text-gray-500">{new Date(d.computed_at).toLocaleString()}</div>
+                      <div className="text-[10px] text-gray-500">
+                        {new Date(d.computed_at).toLocaleString()} · ε={d.epsilon}
+                      </div>
                     </div>
                     <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
                       Load

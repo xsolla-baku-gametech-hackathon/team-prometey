@@ -15,6 +15,7 @@ export default function Home() {
   const [selectedVersions, setSelectedVersions] = useState<[string | null, string | null]>([null, null]);
   const [diffHistory, setDiffHistory] = useState<DiffResult[]>([]);
   const [currentDiffResult, setCurrentDiffResult] = useState<DiffResult | null>(null);
+  const [highlightRequest, setHighlightRequest] = useState<{ name: string; nonce: number } | null>(null);
 
   const [status, setStatus] = useState("Ready");
   const [isError, setIsError] = useState(false);
@@ -157,8 +158,12 @@ export default function Home() {
           versionAId={selectedVersions[0]}
           versionBId={selectedVersions[1]}
           diffPayload={currentDiffResult?.diff || null}
+          highlightRequest={highlightRequest}
         />
-        <ChangelogPanel diffResult={currentDiffResult} />
+        <ChangelogPanel
+          diffResult={currentDiffResult}
+          onMeshClick={(name) => setHighlightRequest({ name, nonce: Date.now() })}
+        />
       </div>
     </div>
   );

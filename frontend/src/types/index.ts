@@ -92,6 +92,7 @@ export interface DiffResult {
   version_a_id: string;
   version_b_id: string;
   computed_at: string;
+  epsilon: number;
   geometry_exact: boolean;
   diff: DiffPayload;
 }
