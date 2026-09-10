@@ -220,6 +220,12 @@ export default function Home() {
         const minCount = Math.min(pos1.count, pos2.count);
         let meshChanged = Math.abs(pos1.count - pos2.count);
 
+        // vertexColors multiplies against the material's own texture/color,
+        // so WHITE (1,1,1) on unchanged vertices leaves V2's real texture
+        // untouched -- that's what makes this "V2 as itself." Changed
+        // vertices lerp from white toward the highlight color instead of
+        // scaling the highlight color by strength, which used to go nearly
+        // black at low displacement instead of a soft tint.
         const newColors = new Float32Array(pos2.count * 3);
         for (let i = 0; i < pos2.count; i++) {
           const x1 = pos1.getX(i % minCount);
@@ -232,29 +238,30 @@ export default function Home() {
           const dist = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2 + (z2 - z1) ** 2);
           if (dist > EPSILON && showHighlight) {
             const strength = Math.min(dist / 0.3, 1);
-            newColors[i * 3] = HIGHLIGHT_COLOR.r * strength;
-            newColors[i * 3 + 1] = HIGHLIGHT_COLOR.g * strength;
-            newColors[i * 3 + 2] = HIGHLIGHT_COLOR.b * strength;
+            newColors[i * 3] = 1 - (1 - HIGHLIGHT_COLOR.r) * strength;
+            newColors[i * 3 + 1] = 1 - (1 - HIGHLIGHT_COLOR.g) * strength;
+            newColors[i * 3 + 2] = 1 - (1 - HIGHLIGHT_COLOR.b) * strength;
             meshChanged++;
           } else {
-            newColors[i * 3] = 0.7;
-            newColors[i * 3 + 1] = 0.7;
-            newColors[i * 3 + 2] = 0.7;
+            newColors[i * 3] = 1;
+            newColors[i * 3 + 1] = 1;
+            newColors[i * 3 + 2] = 1;
           }
         }
 
         meshV2.geometry.setAttribute("color", new THREE.BufferAttribute(newColors, 3));
-        meshV2.material = new THREE.MeshStandardMaterial({
-          vertexColors: true,
-          roughness: 0.6,
-          metalness: 0.05,
-          // V2 renders as itself -- solid and opaque. Only V1 (above) is the
-          // translucent x-ray ghost; V2 must never be see-through like it.
-          transparent: false,
-          opacity: 1,
-          depthWrite: true,
-          depthTest: true,
-        });
+        // Clone V2's OWN material (keeping its texture/map/base color) rather
+        // than replacing it with a bare flat material -- only add the vertex
+        // colors and the "always solid" guarantees on top of it.
+        const originalMat = Array.isArray(meshV2.material) ? meshV2.material[0] : meshV2.material;
+        const preservedMat = originalMat.clone() as THREE.MeshStandardMaterial;
+        preservedMat.vertexColors = true;
+        preservedMat.transparent = false;
+        preservedMat.opacity = 1;
+        preservedMat.depthWrite = true;
+        preservedMat.depthTest = true;
+        preservedMat.needsUpdate = true;
+        meshV2.material = preservedMat;
 
         changedCount += meshChanged;
         const pct = ((meshChanged / pos2.count) * 100).toFixed(1);
