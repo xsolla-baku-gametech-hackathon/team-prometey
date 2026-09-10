@@ -6,7 +6,11 @@ interface ChangelogPanelProps {
   diffResult: DiffResult | null;
   /** Called with a mesh name when a row is clicked, so the viewport can flash it. */
   onMeshClick?: (meshName: string) => void;
+  /** Called with a mesh name + vertex index so the viewport can fly the camera to it. */
+  onVertexClick?: (meshName: string, vertexIndex: number) => void;
 }
+
+const MAX_VERTEX_ROWS = 50;
 
 type LineKind = "add" | "remove" | "context";
 
@@ -86,7 +90,66 @@ function meshBar(m: MeshDiffData) {
   return { widthPct: Math.min(Math.max(m.changed_vertex_percent, 0), 100), colorClass: "bg-[#2563eb]" };
 }
 
-export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMeshClick }) => {
+/** Changed vertex indices for one mesh, sorted by displacement magnitude, capped for the DOM. */
+function topChangedVertices(m: MeshDiffData): { index: number; displacement: number }[] {
+  if (!m.changed_vertex_indices) return [];
+  const rows = m.changed_vertex_indices.map((index) => ({
+    index,
+    displacement: m.displacements?.[index] ?? 0,
+  }));
+  rows.sort((a, b) => b.displacement - a.displacement);
+  return rows.slice(0, MAX_VERTEX_ROWS);
+}
+
+/** Expandable list of a mesh's changed vertices — click one to fly the camera to it. */
+function VertexList({
+  mesh,
+  onVertexClick,
+}: {
+  mesh: MeshDiffData;
+  onVertexClick?: (meshName: string, vertexIndex: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!mesh.changed_vertex_indices?.length) return null;
+  const rows = topChangedVertices(mesh);
+  const truncated = mesh.changed_vertex_indices.length > rows.length;
+
+  return (
+    <div className="ml-6 mr-2 mb-1">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-[10px] text-[#2563eb] hover:text-[#1d4ed8] transition-colors"
+      >
+        <ChevronRight className={`w-3 h-3 transition-transform ${open ? "rotate-90" : ""}`} />
+        {open ? "Hide" : "Show"} changed vertices ({mesh.changed_vertex_count})
+      </button>
+      {open && (
+        <div className="mt-1 max-h-40 overflow-y-auto space-y-0.5 border border-[#e2e8f0] rounded bg-[#f8fafc] p-1">
+          {rows.map(({ index, displacement }) => (
+            <div
+              key={index}
+              onClick={() => onVertexClick?.(mesh.mesh_name, index)}
+              className={`flex items-center justify-between px-1.5 py-1 rounded text-[10px] font-mono ${
+                onVertexClick ? "cursor-pointer hover:bg-[#eff6ff]" : ""
+              }`}
+              title={onVertexClick ? "Click to fly the camera to this vertex" : undefined}
+            >
+              <span className="text-[#334155]">vertex #{index}</span>
+              <span className="text-[#2563eb]">Δ{displacement.toFixed(4)}</span>
+            </div>
+          ))}
+          {truncated && (
+            <div className="px-1.5 py-1 text-[9px] text-[#94a3b8]">
+              showing top {rows.length} of {mesh.changed_vertex_count}, by displacement
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMeshClick, onVertexClick }) => {
   const [showUnchanged, setShowUnchanged] = useState(false);
 
   if (!diffResult) {
@@ -202,6 +265,7 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
                     <div className="ml-6 mr-2 mt-0.5 mb-1 h-1 rounded bg-[#e2e8f0] overflow-hidden">
                       <div className={`h-full ${bar.colorClass}`} style={{ width: `${bar.widthPct || 100}%` }} />
                     </div>
+                    <VertexList mesh={m} onVertexClick={onVertexClick} />
                   </div>
                 );
               })}
