@@ -1,5 +1,5 @@
 import React from "react";
-import { Download, AlertTriangle } from "lucide-react";
+import { Download } from "lucide-react";
 import type { AuditRunOut, LootTable } from "../types";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
@@ -44,21 +44,21 @@ export const AuditResults: React.FC<{ result: AuditRunOut; table: LootTable; can
           <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted mb-2.5">
             Validation Issues ({validation_issues.length})
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {validation_issues.map((issue, i) => (
               <div
                 key={i}
-                className={`flex items-start gap-2.5 rounded-lg px-3.5 py-2.5 text-[13px] leading-[1.5] border ${
-                  issue.severity === "error"
-                    ? "bg-danger-soft border-danger/25 text-danger"
-                    : "bg-warning-soft border-warning/30 text-warning"
+                className={`rounded-lg border p-3 ${
+                  issue.severity === "error" ? "bg-danger-soft border-danger/25" : "bg-warning-soft border-warning/30"
                 }`}
               >
-                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                <div>
-                  <span className="font-mono text-[12px] font-semibold mr-2">{issue.code}</span>
-                  <span className="text-ink">{issue.message}</span>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <Badge tone={issue.severity === "error" ? "red" : "yellow"} solid>
+                    {issue.severity}
+                  </Badge>
+                  <span className="font-mono text-[10.5px] text-ink-muted truncate">{issue.code}</span>
                 </div>
+                <p className="text-[12.5px] leading-[1.5] text-ink">{issue.message}</p>
               </div>
             ))}
           </div>
