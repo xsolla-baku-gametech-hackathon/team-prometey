@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MeshDiff — 3D Asset Version Control & Diff Viewer</title>
+<style>
+  :root {
+    --bg-darkest: #0b0d10;
+    --bg-sidebar: #13161c;
+    --bg-panel: #181c24;
+    --bg-card: #202632;
+    --bg-card-hover: #28303f;
+    --border: #293040;
+    --border-focus: #3d7fff;
+    --text-main: #f0f3f8;
+    --text-muted: #8e99ac;
+    --text-subtle: #5f6b80;
+    --primary: #3d7fff;
+    --primary-hover: #5994ff;
+    --primary-dim: #1e3a6e;
+    --success: #2ecb72;
+    --success-dim: #103822;
+    --danger: #f85149;
+    --danger-dim: #441818;
+    --warning: #e3b341;
+    --warning-dim: #423214;
+    --info: #58a6ff;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg-darkest);
+    color: var(--text-main);
+    font-family: var(--font);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* Top Navigation Bar */
+  #header {
+    height: 52px;
+    background: var(--bg-sidebar);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .brand-logo {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #3d7fff, #8c52ff);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 14px;
+    color: white;
+    box-shadow: 0 0 12px rgba(61,127,255,0.4);
+  }
+  .brand-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #fff;
+  }
+  .brand-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    background: var(--primary-dim);
+    color: var(--info);
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+  }
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-card);
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+  }
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+  }
+  .status-dot.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+  .status-dot.loading { background: var(--warning); box-shadow: 0 0 8px var(--warning); animation: pulse 1s infinite alternate; }
+  @keyframes pulse { from { opacity: 0.4; } to { opacity: 1; } }
+
+  /* Main Workspace Layout */
+  #workspace {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+  }
+
+  /* Left Sidebar */
+  #sidebar {
+    width: 340px;
+    background: var(--bg-sidebar);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .sidebar-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-tabs {
+    display: flex;
+    background: var(--bg-darkest);
+    border-radius: 6px;
+    padding: 2px;
+    margin-top: 8px;
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tab-btn.active {
+    background: var(--bg-card);
+    color: var(--text-main);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .sidebar-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-subtle);
+    margin: 16px 0 8px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .section-title:first-child { margin-top: 0; }
+
+  /* Inputs & Buttons */
+  input[type=text], input[type=number], select {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-main);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type=text]:focus, input[type=number]:focus, select:focus {
+    border-color: var(--border-focus);
+  }
+  .input-row {
+    display: flex;
+    gap: 6px;
+  }
+  button.btn {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.15s, opacity 0.15s;
+    white-space: nowrap;
+  }
+  button.btn:hover { background: var(--primary-hover); }
+  button.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.btn-secondary {
+    background: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+  }
+  button.btn-secondary:hover { background: var(--bg-card-hover); }
+  button.btn-sm { padding: 4px 8px; font-size: 11px; }
+
+  /* Project and Version Cards */
+  .project-card {
+    padding: 10px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .project-card:hover { background: var(--bg-card-hover); border-color: #3b4458; }
+  .project-card.active { background: #1c273e; border-color: var(--primary); }
+  .project-name { font-size: 13px; font-weight: 600; }
+  .project-date { font-size: 10px; color: var(--text-subtle); margin-top: 2px; }
+
+  /* Dropzone */
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 18px 12px;
+    text-align: center;
+    background: rgba(24, 28, 36, 0.4);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--primary);
+    background: rgba(61, 127, 255, 0.08);
+  }
+  .dropzone-icon { font-size: 24px; margin-bottom: 6px; }
+  .dropzone-text { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .dropzone-hint { font-size: 10px; color: var(--text-subtle); margin-top: 4px; }
+
+  /* Version Item List */
+  .version-item {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    transition: all 0.15s;
+    cursor: pointer;
+  }
+  .version-item:hover { background: var(--bg-card-hover); }
+  .version-item.selected-a { border-color: #ff9800; background: rgba(255,152,0,0.08); }
+  .version-item.selected-b { border-color: #00bcd4; background: rgba(0,188,212,0.08); }
+  .version-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+  }
+  .badge-a { background: #ff9800; color: #000; }
+  .badge-b { background: #00bcd4; color: #000; }
+  .version-info { flex: 1; min-width: 0; }
+  .version-filename { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .version-meta { font-size: 10px; color: var(--text-subtle); }
+
+  /* Diff Action Box */
+  .diff-controls-box {
+    margin-top: 14px;
+    padding: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .param-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .param-input {
+    width: 90px;
+    padding: 4px 6px;
+    font-size: 11px;
+  }
+
+  /* Center 3D Viewport */
+  #viewport-container {
+    flex: 1;
+    position: relative;
+    background: radial-gradient(circle at 50% 50%, #151922 0%, #0a0c10 100%);
+    overflow: hidden;
+  }
+  #viewer {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* Viewport Toolbar Overlay */
+  .viewport-toolbar {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 4px;
+    background: rgba(19, 22, 28, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    padding: 4px 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    z-index: 5;
+  }
+  .mode-pill {
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .mode-pill:hover { color: var(--text-main); }
+  .mode-pill.active {
+    background: var(--primary);
+    color: white;
+    box-shadow: 0 0 10px rgba(61,127,255,0.4);
+  }
+
+  /* Viewport Quick Controls */
+  .viewport-quick-tools {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 5;
+  }
+  .tool-btn {
+    width: 34px;
+    height: 34px;
+    background: rgba(19, 22, 28, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tool-btn:hover { color: var(--text-main); border-color: var(--border-focus); background: var(--bg-card); }
+  .tool-btn.active { color: var(--info); border-color: var(--info); background: rgba(61,127,255,0.15); }
+
+  /* Viewport Legend */
+  .viewport-overlay-legend {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    background: rgba(19, 22, 28, 0.88);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    z-index: 5;
+    pointer-events: none;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+    color: var(--text-muted);
+  }
+  .legend-item:last-child { margin-bottom: 0; }
+  .swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+  .swatch.unchanged { background: #6b7280; }
+  .swatch.changed { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+  .swatch.added { background: #10b981; box-shadow: 0 0 6px #10b981; }
+
+  /* Empty State Overlay */
+  .viewport-empty {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    max-width: 320px;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+  .empty-title { font-size: 15px; font-weight: 600; color: var(--text-main); margin-bottom: 6px; }
+  .empty-desc { font-size: 12px; line-height: 1.4; color: var(--text-subtle); }
+
+  /* Right Sidebar / Changelog Inspector */
+  #changelog-panel {
+    width: 380px;
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-title { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; }
+  .panel-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+  }
+
+  /* Summary Metrics Cards */
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .metric-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+  }
+  .metric-val { font-size: 18px; font-weight: 700; color: var(--text-main); }
+  .metric-label { font-size: 10px; color: var(--text-subtle); text-transform: uppercase; margin-top: 2px; }
+
+  /* Accordion Diff Sections */
+  .diff-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+  .diff-section-header {
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    background: rgba(255,255,255,0.02);
+  }
+  .diff-section-header:hover { background: var(--bg-card-hover); }
+  .diff-section-title { font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .diff-section-badge { font-size: 10px; padding: 2px 6px; border-radius: 10px; background: var(--bg-darkest); color: var(--text-muted); }
+  .diff-section-body { padding: 10px 12px; border-top: 1px solid var(--border); font-size: 11px; }
+
+  .diff-row {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .diff-row:last-child { border-bottom: none; }
+  .tag {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .tag.added { background: var(--success-dim); color: var(--success); }
+  .tag.removed { background: var(--danger-dim); color: var(--danger); }
+  .tag.changed { background: var(--warning-dim); color: var(--warning); }
+  .tag.exact { background: var(--primary-dim); color: var(--info); }
+  .tag.approx { background: var(--bg-darkest); color: var(--text-muted); }
+
+  /* Tree & Property Delta Rows */
+  .prop-delta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+  }
+  .prop-name { font-weight: 600; color: var(--text-main); }
+  .prop-diff { color: var(--text-muted); font-family: monospace; font-size: 10px; }
+  .prop-diff .old { color: var(--danger); text-decoration: line-through; }
+  .prop-diff .new { color: var(--success); }
+
+  /* Toast Notification */
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 16px;
+    border-radius: 6px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-main);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    z-index: 100;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.25s ease;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.error { border-color: var(--danger); background: #261414; }
+  #toast.success { border-color: var(--success); background: #122818; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header">
+  <div class="brand">
+    <div class="brand-logo">MD</div>
+    <div>
+      <span class="brand-title">MeshDiff</span>
+      <span class="brand-badge">GameTech Studio</span>
+    </div>
+  </div>
+  <div class="header-meta">
+    <div class="status-pill">
+      <div id="statusDot" class="status-dot"></div>
+      <span id="statusText">Ready</span>
+    </div>
+  </div>
+</div>
+
+<!-- Workspace -->
+<div id="workspace">
+
+  <!-- Left Sidebar -->
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <div class="input-row">
+        <input type="text" id="newProjectName" placeholder="Create new project..." />
+        <button id="createProjectBtn" class="btn btn-sm">Create</button>
+      </div>
+      <div class="sidebar-tabs">
+        <button id="tabProjects" class="tab-btn active">Projects & Files</button>
+        <button id="tabHistory" class="tab-btn">Diff History</button>
+      </div>
+    </div>
+
+    <div class="sidebar-scroll">
+      <!-- Projects Tab Pane -->
+      <div id="paneProjects">
+        <div class="section-title">
+          <span>Active Projects</span>
+          <button id="refreshProjectsBtn" class="btn btn-secondary btn-sm">Refresh</button>
+        </div>
+        <div id="projectList"><div class="version-meta">Loading projects...</div></div>
+
+        <!-- Version Management (Shows when project is selected) -->
+        <div id="versionSection" style="display: none; margin-top: 16px;">
+          <div class="section-title">
+            <span>Upload 3D Asset Version</span>
+          </div>
+          <div id="dropzone" class="dropzone">
+            <div class="dropzone-icon">📦</div>
+            <div class="dropzone-text">Drop .glb or .gltf file here</div>
+            <div class="dropzone-hint">or click to browse local files</div>
+            <input type="file" id="fileInput" accept=".glb,.gltf" style="display:none;" />
+          </div>
+
+          <div class="section-title">
+            <span>Project Versions</span>
+            <span id="versionCountBadge" class="diff-section-badge">0</span>
+          </div>
+          <div id="versionList"></div>
+
+          <!-- Diff Launch Controls -->
+          <div class="diff-controls-box">
+            <div class="param-row">
+              <span>Vertex Epsilon (Noise Filter)</span>
+              <input type="number" id="epsilonInput" class="param-input" value="0.0001" step="0.0001" />
+            </div>
+            <button id="diffBtn" class="btn" style="width: 100%;" disabled>
+              ⚡ Compute 3D Diff
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Diff History Pane -->
+      <div id="paneHistory" style="display: none;">
+        <div class="section-title">
+          <span>Saved Project Diffs</span>
+        </div>
+        <div id="diffHistoryList"><div class="version-meta">Select a project to view history.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Center 3D Viewport -->
+  <div id="viewport-container">
+    <!-- Viewport Mode Switcher -->
+    <div class="viewport-toolbar">
+      <button class="mode-pill active" data-mode="diff">⚡ 3D Diff Mode</button>
+      <button class="mode-pill" data-mode="versionB">Target (Version B)</button>
+      <button class="mode-pill" data-mode="versionA">Base (Version A)</button>
+      <button class="mode-pill" data-mode="ghost">Ghost Overlay</button>
+    </div>
+
+    <!-- Quick Tools -->
+    <div class="viewport-quick-tools">
+      <button id="btnResetCam" class="tool-btn" title="Reset Camera">🎯</button>
+      <button id="btnWireframe" class="tool-btn" title="Toggle Wireframe">🌐</button>
+      <button id="btnAutoRotate" class="tool-btn" title="Auto Rotate">🔄</button>
+      <button id="btnGrid" class="tool-btn active" title="Toggle Floor Grid">📏</button>
+    </div>
+
+    <!-- WebGL Canvas Container -->
+    <div id="viewer"></div>
+
+    <!-- Legend -->
+    <div id="viewportLegend" class="viewport-overlay-legend" style="display:none;">
+      <div class="legend-item"><span class="swatch unchanged"></span> Unchanged Vertices</div>
+      <div class="legend-item"><span class="swatch changed"></span> Displaced / Changed</div>
+      <div class="legend-item"><span class="swatch added"></span> Added Geometry</div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="viewportEmpty" class="viewport-empty">
+      <div class="empty-icon">📐</div>
+      <div class="empty-title">3D Viewport Ready</div>
+      <div class="empty-desc">Select or upload two versions of a 3D asset in the sidebar and click <b>Compute 3D Diff</b> to visualize changes.</div>
+    </div>
+  </div>
+
+  <!-- Right Changelog & Inspector Panel -->
+  <div id="changelog-panel">
+    <div class="panel-header">
+      <div class="panel-title">Diff Inspector & Summary</div>
+      <span id="diffStatusTag" class="tag exact" style="display:none;">Exact</span>
+    </div>
+    <div class="panel-scroll" id="changelogBody">
+      <div style="text-align:center; margin-top: 80px; color: var(--text-subtle); font-size: 12px;">
+        No diff currently active.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Three.js + Modules -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+// Auto-detect API location (host + port 8000)
+const API = `${window.location.protocol}//${window.location.hostname || "localhost"}:8000`;
+
+// State
+let currentProjectId = null;
+let currentProject = null;
+let selectedVersions = []; // [versionA_id, versionB_id]
+let currentDiffResult = null;
+let currentMode = "diff"; // 'diff', 'versionA', 'versionB', 'ghost'
+let isWireframe = false;
+let isAutoRotate = false;
+let showGrid = true;
+
+// 3D Scene globals
+let scene, camera, renderer, controls, gridHelper;
+let modelA = null, modelB = null, diffModel = null;
+let animationStarted = false;
+
+// DOM references
+const statusDot = document.getElementById("statusDot");
+const statusText = document.getElementById("statusText");
+const projectList = document.getElementById("projectList");
+const versionSection = document.getElementById("versionSection");
+const versionList = document.getElementById("versionList");
+const diffBtn = document.getElementById("diffBtn");
+const dropzone = document.getElementById("dropzone");
+const fileInput = document.getElementById("fileInput");
+const changelogBody = document.getElementById("changelogBody");
+const viewportEmpty = document.getElementById("viewportEmpty");
+const viewportLegend = document.getElementById("viewportLegend");
+const diffStatusTag = document.getElementById("diffStatusTag");
+
+function toast(msg, type = "info") {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  setTimeout(() => { t.className = ""; }, 3200);
+}
+
+function setStatus(text, status = "ready") {
+  statusText.textContent = text;
+  statusDot.className = "status-dot";
+  if (status === "error") statusDot.classList.add("error");
+  else if (status === "loading") statusDot.classList.add("loading");
+}
+
+// API Call Wrapper
+async function api(path, options = {}) {
+  try {
+    const res = await fetch(`${API}${path}`, options);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `Request failed with code ${res.status}`);
+    }
+    return res.json();
+  } catch (err) {
+    setStatus(err.message, "error");
+    toast(err.message, "error");
+    throw err;
+  }
+}
+
+// --- Project Management ---
+async function loadProjects() {
+  setStatus("Loading projects...", "loading");
+  try {
+    const projects = await api("/projects");
+    projectList.innerHTML = "";
+    if (projects.length === 0) {
+      projectList.innerHTML = '<div class="version-meta">No projects found. Create one above!</div>';
+      setStatus("Ready");
+      return;
+    }
+    projects.forEach((p) => {
+      const card = document.createElement("div");
+      card.className = "project-card" + (p.id === currentProjectId ? " active" : "");
+      card.innerHTML = `
+        <div>
+          <div class="project-name">${escapeHtml(p.name)}</div>
+          <div class="project-date">Created ${new Date(p.created_at).toLocaleDateString()}</div>
+        </div>
+        <span class="diff-section-badge">Open</span>
+      `;
+      card.onclick = () => selectProject(p);
+      projectList.appendChild(card);
+    });
+    setStatus("Ready");
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+async function selectProject(project) {
+  currentProjectId = project.id;
+  currentProject = project;
+  selectedVersions = [];
+  versionSection.style.display = "block";
+  await loadProjects();
+  await loadVersions();
+  await loadDiffHistory();
+  toast(`Selected project: ${project.name}`, "success");
+}
+
+document.getElementById("createProjectBtn").onclick = async () => {
+  const input = document.getElementById("newProjectName");
+  const name = input.value.trim();
+  if (!name) return;
+  const formData = new FormData();
+  formData.append("name", name);
+  try {
+    const project = await api("/projects", { method: "POST", body: formData });
+    input.value = "";
+    await selectProject(project);
+  } catch (e) {}
+};
+
+document.getElementById("refreshProjectsBtn").onclick = () => loadProjects();
+
+// Tab switching
+document.getElementById("tabProjects").onclick = () => {
+  document.getElementById("tabProjects").classList.add("active");
+  document.getElementById("tabHistory").classList.remove("active");
+  document.getElementById("paneProjects").style.display = "block";
+  document.getElementById("paneHistory").style.display = "none";
+};
+document.getElementById("tabHistory").onclick = () => {
+  document.getElementById("tabHistory").classList.add("active");
+  document.getElementById("tabProjects").classList.remove("active");
+  document.getElementById("paneProjects").style.display = "none";
+  document.getElementById("paneHistory").style.display = "block";
+  loadDiffHistory();
+};
+
+// --- Versions & Upload ---
+async function loadVersions() {
+  if (!currentProjectId) return;
+  try {
+    const project = await api(`/projects/${currentProjectId}`);
+    versionList.innerHTML = "";
+    document.getElementById("versionCountBadge").textContent = project.versions.length;
+    if (project.versions.length === 0) {
+      versionList.innerHTML = '<div class="version-meta">No versions uploaded yet. Drop a .glb file above!</div>';
+      updateDiffBtnState();
+      return;
+    }
+    project.versions.forEach((v) => {
+      const isA = selectedVersions[0] === v.id;
+      const isB = selectedVersions[1] === v.id;
+      const item = document.createElement("div");
+      item.className = "version-item" + (isA ? " selected-a" : isB ? " selected-b" : "");
+      
+      let badgeHtml = "";
+      if (isA) badgeHtml = `<span class="version-badge badge-a">Base (A)</span>`;
+      else if (isB) badgeHtml = `<span class="version-badge badge-b">Target (B)</span>`;
+
+      item.innerHTML = `
+        <div class="version-info">
+          <div class="version-filename">${escapeHtml(v.filename)}</div>
+          <div class="version-meta">${new Date(v.uploaded_at).toLocaleString()} • ${v.is_extracted ? '✓ Extracted' : 'Extracting...'}</div>
+        </div>
+        ${badgeHtml}
+      `;
+      item.onclick = () => toggleVersionSelection(v.id);
+      versionList.appendChild(item);
+    });
+    updateDiffBtnState();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function toggleVersionSelection(id) {
+  if (selectedVersions[0] === id) {
+    selectedVersions.shift();
+  } else if (selectedVersions[1] === id) {
+    selectedVersions.pop();
+  } else if (selectedVersions.length === 0) {
+    selectedVersions.push(id);
+  } else if (selectedVersions.length === 1) {
+    selectedVersions.push(id);
+  } else {
+    selectedVersions[1] = id;
+  }
+  loadVersions();
+}
+
+function updateDiffBtnState() {
+  diffBtn.disabled = selectedVersions.length !== 2;
+  if (selectedVersions.length === 2) {
+    diffBtn.innerHTML = `⚡ Compute 3D Diff (A vs B)`;
+  } else if (selectedVersions.length === 1) {
+    diffBtn.innerHTML = `Select 1 more version...`;
+  } else {
+    diffBtn.innerHTML = `Select 2 versions to diff`;
+  }
+}
+
+// Upload Handling
+async function uploadFile(file) {
+  if (!currentProjectId) {
+    toast("Please create or select a project first", "error");
+    return;
+  }
+  const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+  if (![".glb", ".gltf"].includes(ext)) {
+    toast("Only .glb and .gltf files are supported", "error");
+    return;
+  }
+  setStatus(`Uploading & extracting ${file.name}...`, "loading");
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    await api(`/projects/${currentProjectId}/versions`, {
+      method: "POST",
+      body: formData,
+    });
+    setStatus("Asset extracted successfully!");
+    toast(`Extracted ${file.name}`, "success");
+    await loadVersions();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+dropzone.onclick = () => fileInput.click();
+fileInput.onchange = () => { if (fileInput.files[0]) uploadFile(fileInput.files[0]); };
+dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add("drag-over"); };
+dropzone.ondragleave = () => dropzone.classList.remove("drag-over");
+dropzone.ondrop = (e) => {
+  e.preventDefault();
+  dropzone.classList.remove("drag-over");
+  if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
+};
+
+// --- Diff Computation & History ---
+diffBtn.onclick = async () => {
+  if (selectedVersions.length !== 2) return;
+  const [versionAId, versionBId] = selectedVersions;
+  const epsilon = parseFloat(document.getElementById("epsilonInput").value) || 0.0001;
+
+  setStatus("Computing mesh diff...", "loading");
+  const formData = new FormData();
+  formData.append("version_a_id", versionAId);
+  formData.append("version_b_id", versionBId);
+  formData.append("epsilon", epsilon);
+
+  try {
+    const res = await api("/diffs", { method: "POST", body: formData });
+    currentDiffResult = res;
+    setStatus("Diff ready!");
+    toast("Diff computation complete!", "success");
+    renderChangelog(res);
+    await load3DModels(versionAId, versionBId, res.diff);
+    loadDiffHistory();
+  } catch (e) {
+    console.error(e);
+  }
+};
+
+async function loadDiffHistory() {
+  if (!currentProjectId) return;
+  const list = document.getElementById("diffHistoryList");
+  try {
+    const diffs = await api(`/projects/${currentProjectId}/diffs`);
+    list.innerHTML = "";
+    if (diffs.length === 0) {
+      list.innerHTML = '<div class="version-meta">No computed diffs in this project yet.</div>';
+      return;
+    }
+    diffs.forEach((d) => {
+      const card = document.createElement("div");
+      card.className = "project-card";
+      card.innerHTML = `
+        <div>
+          <div class="project-name">${d.geometry_exact ? '✓ Exact Diff' : '≈ Approx Diff'}</div>
+          <div class="project-date">${new Date(d.computed_at).toLocaleString()}</div>
+        </div>
+        <button class="btn btn-sm btn-secondary">Load</button>
+      `;
+      card.onclick = async () => {
+        selectedVersions = [d.version_a_id, d.version_b_id];
+        currentDiffResult = d;
+        await loadVersions();
+        renderChangelog(d);
+        await load3DModels(d.version_a_id, d.version_b_id, d.diff);
+        toast("Loaded cached diff from history", "success");
+      };
+      list.appendChild(card);
+    });
+  } catch (e) {}
+}
+
+// --- Changelog & Metrics Rendering ---
+function renderChangelog(result) {
+  const diff = result.diff;
+  changelogBody.innerHTML = "";
+
+  diffStatusTag.style.display = "inline-block";
+  diffStatusTag.className = result.geometry_exact ? "tag exact" : "tag approx";
+  diffStatusTag.textContent = result.geometry_exact ? "Index-Aligned Exact" : "Topology Approx";
+
+  // Metrics Grid
+  const metrics = document.createElement("div");
+  metrics.className = "metric-grid";
+  metrics.innerHTML = `
+    <div class="metric-card">
+      <div class="metric-val" style="color: ${diff.geometry.changed_percent > 0 ? 'var(--warning)' : 'var(--success)'};">${diff.geometry.changed_percent}%</div>
+      <div class="metric-label">Geometry Changed</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">${diff.geometry.total_changed_vertices.toLocaleString()}</div>
+      <div class="metric-label">Changed Vertices</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">${diff.materials.changed.length + diff.materials.added.length + diff.materials.removed.length}</div>
+      <div class="metric-label">Material Deltas</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">${diff.hierarchy.moved.length + diff.hierarchy.added.length + diff.hierarchy.removed.length}</div>
+      <div class="metric-label">Transform Deltas</div>
+    </div>
+  `;
+  changelogBody.appendChild(metrics);
+
+  // 1. Geometry Section
+  const geomSection = createSection(
+    "📐 Geometry Meshes",
+    diff.geometry.summary,
+    [
+      ...diff.geometry.added_meshes.map(m => createRow("added", `+ Added mesh: ${m}`)),
+      ...diff.geometry.removed_meshes.map(m => createRow("removed", `- Removed mesh: ${m}`)),
+      ...diff.geometry.meshes.map(m => {
+        if (m.unchanged) {
+          return createRow("exact", `${m.mesh_name}: 0 / ${m.vertex_count} vertices changed (0%)`);
+        }
+        return createRow(
+          m.exact ? "changed" : "approx",
+          `${m.mesh_name}: ${m.changed_vertex_count} / ${m.vertex_count} vertices changed (${m.changed_vertex_percent}%)`
+        );
+      })
+    ],
+    diff.geometry.geometry_exact ? null : "Note: Vertex counts differed — calculated via 3D nearest-neighbor distance approximation."
+  );
+  changelogBody.appendChild(geomSection);
+
+  // 2. Materials Section
+  const matRows = [
+    ...diff.materials.added.map(m => createRow("added", `+ Material: ${m.name}`)),
+    ...diff.materials.removed.map(m => createRow("removed", `- Material: ${m.name}`)),
+    ...diff.materials.changed.map(m => {
+      const changesList = Object.entries(m.changes).map(([k, v]) => `
+        <div class="prop-diff">
+          <b>${k}:</b> <span class="old">${JSON.stringify(v.old)}</span> → <span class="new">${JSON.stringify(v.new)}</span>
+        </div>
+      `).join("");
+      const div = document.createElement("div");
+      div.className = "diff-row";
+      div.innerHTML = `
+        <span class="tag changed">changed</span>
+        <div class="prop-delta">
+          <div class="prop-name">${escapeHtml(m.name)}</div>
+          ${changesList}
+        </div>
+      `;
+      return div;
+    })
+  ];
+  changelogBody.appendChild(createSection("🎨 Materials & PBR", diff.materials.summary, matRows));
+
+  // 3. Hierarchy Section
+  const hierRows = [
+    ...diff.hierarchy.added.map(n => createRow("added", `+ Node: ${n.name}`)),
+    ...diff.hierarchy.removed.map(n => createRow("removed", `- Node: ${n.name}`)),
+    ...diff.hierarchy.reparented.map(n => createRow("changed", `Reparented: ${n.name} (${n.old_parent || 'root'} → ${n.new_parent || 'root'})`)),
+    ...diff.hierarchy.moved.map(n => {
+      const div = document.createElement("div");
+      div.className = "diff-row";
+      div.innerHTML = `
+        <span class="tag changed">moved</span>
+        <div class="prop-delta">
+          <div class="prop-name">${escapeHtml(n.name)}</div>
+          <div class="prop-diff">Pos: <span class="old">${JSON.stringify(n.old_translation)}</span> → <span class="new">${JSON.stringify(n.new_translation)}</span></div>
+        </div>
+      `;
+      return div;
+    })
+  ];
+  changelogBody.appendChild(createSection("🌲 Hierarchy & Transforms", diff.hierarchy.summary, hierRows, diff.hierarchy.note));
+}
+
+function createSection(title, summary, rows, note = null) {
+  const sec = document.createElement("div");
+  sec.className = "diff-section";
+  sec.innerHTML = `
+    <div class="diff-section-header">
+      <div class="diff-section-title">${title}</div>
+      <div class="diff-section-badge">${rows.length} items</div>
+    </div>
+    <div class="diff-section-body">
+      <div style="color:var(--text-muted); margin-bottom: 8px;">${summary}</div>
+      ${note ? `<div style="color:var(--warning); margin-bottom: 8px;">⚠️ ${note}</div>` : ''}
+      <div class="diff-rows-container"></div>
+    </div>
+  `;
+  const container = sec.querySelector(".diff-rows-container");
+  if (rows.length === 0) {
+    container.innerHTML = '<div style="color:var(--text-subtle);">No changes detected.</div>';
+  } else {
+    rows.forEach(r => container.appendChild(r));
+  }
+  return sec;
+}
+
+function createRow(tagType, text) {
+  const el = document.createElement("div");
+  el.className = "diff-row";
+  el.innerHTML = `<span class="tag ${tagType}">${tagType}</span><span>${escapeHtml(text)}</span>`;
+  return el;
+}
+
+function escapeHtml(s) {
+  if (typeof s !== "string") return s;
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// --- Three.js 3D WebGL Viewer ---
+function init3D() {
+  if (animationStarted) return;
+  animationStarted = true;
+
+  const container = document.getElementById("viewer");
+  scene = new THREE.Scene();
+
+  camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.01, 1000);
+  camera.position.set(3, 2.5, 3.5);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.shadowMap.enabled = true;
+  container.appendChild(renderer.domElement);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+
+  // Studio Lighting
+  const ambient = new THREE.AmbientLight(0xffffff, 0.8);
+  scene.add(ambient);
+
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x222233, 0.6);
+  scene.add(hemi);
+
+  const dir1 = new THREE.DirectionalLight(0xffffff, 1.2);
+  dir1.position.set(5, 10, 7);
+  scene.add(dir1);
+
+  const dir2 = new THREE.DirectionalLight(0x58a6ff, 0.4);
+  dir2.position.set(-5, -5, -5);
+  scene.add(dir2);
+
+  // Ground Grid
+  gridHelper = new THREE.GridHelper(10, 20, 0x3d7fff, 0x222834);
+  gridHelper.position.y = -0.01;
+  scene.add(gridHelper);
+
+  window.addEventListener("resize", () => {
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  });
+
+  function renderLoop() {
+    requestAnimationFrame(renderLoop);
+    if (isAutoRotate && controls) {
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 2.0;
+    } else if (controls) {
+      controls.autoRotate = false;
+    }
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  renderLoop();
+}
+
+async function load3DModels(versionAId, versionBId, diffPayload) {
+  init3D();
+  viewportEmpty.style.display = "none";
+  viewportLegend.style.display = "block";
+
+  if (modelA) scene.remove(modelA);
+  if (modelB) scene.remove(modelB);
+  if (diffModel) scene.remove(diffModel);
+
+  const loader = new GLTFLoader();
+  const urlA = `${API}/versions/${versionAId}/file`;
+  const urlB = `${API}/versions/${versionBId}/file`;
+
+  const meshDiffByName = {};
+  for (const m of diffPayload.geometry.meshes) {
+    meshDiffByName[m.mesh_name] = m;
+  }
+
+  // Load Version B (Target & Base for Diff)
+  loader.load(urlB, (gltf) => {
+    modelB = gltf.scene;
+    diffModel = gltf.scene.clone(true);
+
+    // Apply Diff Vertex Coloring on diffModel
+    diffModel.traverse((obj) => {
+      if (!obj.isMesh) return;
+      const meshDiff = meshDiffByName[obj.name] || meshDiffByName[obj.geometry?.name];
+      applyDiffColoring(obj, meshDiff);
+    });
+
+    // Frame Camera
+    const box = new THREE.Box3().setFromObject(modelB);
+    const size = box.getSize(new THREE.Vector3()).length() || 2;
+    const center = box.getCenter(new THREE.Vector3());
+    controls.target.copy(center);
+    camera.position.copy(center).add(new THREE.Vector3(size, size * 0.8, size).multiplyScalar(0.7));
+    camera.near = size / 200;
+    camera.far = size * 200;
+    camera.updateProjectionMatrix();
+
+    // Load Version A (for toggles)
+    loader.load(urlA, (gltfA) => {
+      modelA = gltfA.scene;
+      update3DMode();
+    });
+
+    update3DMode();
+  });
+}
+
+function applyDiffColoring(mesh, meshDiff) {
+  const geom = mesh.geometry;
+  const count = geom.attributes.position.count;
+  const colors = new Float32Array(count * 3);
+
+  const unchangedColor = new THREE.Color(0x6b7280);
+  const changedColor = new THREE.Color(0xf59e0b); // Amber heat
+  const changedSet = meshDiff && !meshDiff.unchanged
+    ? new Set(meshDiff.changed_vertex_indices || [])
+    : new Set();
+
+  for (let i = 0; i < count; i++) {
+    const col = changedSet.has(i) ? changedColor : unchangedColor;
+    colors[i * 3] = col.r;
+    colors[i * 3 + 1] = col.g;
+    colors[i * 3 + 2] = col.b;
+  }
+
+  geom.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  mesh.material = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.5,
+    metalness: 0.1,
+    wireframe: isWireframe,
+  });
+}
+
+function update3DMode() {
+  if (!scene) return;
+  if (modelA) scene.remove(modelA);
+  if (modelB) scene.remove(modelB);
+  if (diffModel) scene.remove(diffModel);
+
+  if (currentMode === "diff") {
+    if (diffModel) scene.add(diffModel);
+  } else if (currentMode === "versionB") {
+    if (modelB) scene.add(modelB);
+  } else if (currentMode === "versionA") {
+    if (modelA) scene.add(modelA);
+  } else if (currentMode === "ghost") {
+    if (diffModel) scene.add(diffModel);
+    if (modelA) {
+      modelA.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.material = new THREE.MeshBasicMaterial({
+            color: 0x3d7fff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.35,
+          });
+        }
+      });
+      scene.add(modelA);
+    }
+  }
+
+  [modelA, modelB, diffModel].forEach((m) => {
+    if (!m) return;
+    m.traverse((obj) => {
+      if (obj.isMesh && obj.material && currentMode !== "ghost") {
+        obj.material.wireframe = isWireframe;
+      }
+    });
+  });
+}
+
+// Mode Switcher Buttons
+document.querySelectorAll(".mode-pill").forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll(".mode-pill").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentMode = btn.dataset.mode;
+    update3DMode();
+  };
+});
+
+// Quick Tools
+document.getElementById("btnResetCam").onclick = () => {
+  if (controls) controls.reset();
+};
+document.getElementById("btnWireframe").onclick = function() {
+  isWireframe = !isWireframe;
+  this.classList.toggle("active", isWireframe);
+  update3DMode();
+};
+document.getElementById("btnAutoRotate").onclick = function() {
+  isAutoRotate = !isAutoRotate;
+  this.classList.toggle("active", isAutoRotate);
+};
+document.getElementById("btnGrid").onclick = function() {
+  showGrid = !showGrid;
+  this.classList.toggle("active", showGrid);
+  if (gridHelper) gridHelper.visible = showGrid;
+};
+
+// Start
+loadProjects();
+</script>
+</body>
+</html>
