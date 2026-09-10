@@ -1,0 +1,20 @@
+{
+  "table_id": "starter_chest",
+  "advertised_rates": {
+    "legendary_sword": 0.01,
+    "epic_sword": 0.05,
+    "rare_sword": 0.25,
+    "common_sword": 0.7
+  },
+  "items": [
+    { "id": "common_sword", "rarity": "common", "weight": 686 },
+    { "id": "rare_sword", "rarity": "rare", "weight": 250 },
+    { "id": "epic_sword", "rarity": "epic", "weight": 50 },
+    { "id": "legendary_sword", "rarity": "legendary", "weight": 14 }
+  ],
+  "pity": {
+    "target_rarity": "Legendary",
+    "guaranteed_within_pulls": 90,
+    "reset_on_trigger": true
+  }
+}

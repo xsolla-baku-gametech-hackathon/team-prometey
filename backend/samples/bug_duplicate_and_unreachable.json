@@ -1,0 +1,16 @@
+{
+  "table_id": "event_capsule",
+  "advertised_rates": {
+    "mythic_skin": 0.02,
+    "epic_skin": 0.18,
+    "rare_skin": 0.3,
+    "common_skin": 0.5
+  },
+  "items": [
+    { "id": "common_skin", "rarity": "common", "weight": 500 },
+    { "id": "rare_skin", "rarity": "rare", "weight": 300 },
+    { "id": "epic_skin", "rarity": "epic", "weight": 180 },
+    { "id": "epic_skin", "rarity": "epic", "weight": 20 },
+    { "id": "mythic_skin", "rarity": "mythic", "weight": 0 }
+  ]
+}
