@@ -16,7 +16,7 @@ const VARIANT_CLASSES: Record<Variant, string> = {
 export const Button: React.FC<ButtonProps> = ({ variant = "primary", className = "", children, ...rest }) => {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-[14px] font-medium
+      className={`inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[14.5px] font-medium
         transition-colors duration-150 cursor-pointer disabled:cursor-not-allowed ${VARIANT_CLASSES[variant]} ${className}`}
       {...rest}
     >

@@ -78,10 +78,10 @@ export const TableDetailPage: React.FC = () => {
   return (
     <AppShell>
       <div className="max-w-3xl mx-auto px-8 py-10">
-        <div className="flex items-start justify-between mb-1">
+        <div className="flex items-start justify-between mb-2">
           <div>
-            <h1 className="text-[26px] font-semibold tracking-tight">{detail.name}</h1>
-            <p className="text-[13px] text-ink-muted font-mono mt-1">{detail.table.table_id}</p>
+            <h1 className="text-[28px] font-semibold tracking-[-0.5px] text-ink">{detail.name}</h1>
+            <p className="text-[14px] font-mono text-ink-muted mt-1.5">{detail.table.table_id}</p>
           </div>
           <button
             onClick={handleDelete}
@@ -92,15 +92,17 @@ export const TableDetailPage: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-center gap-4 text-[12px] text-ink-muted mt-3 mb-8">
-          <span>{detail.table.items.length} items</span>
-          <span>&middot;</span>
-          <span>{detail.table.pity ? `Pity: ${detail.table.pity.target_rarity}` : "No pity rule"}</span>
+        <div className="flex flex-wrap items-center gap-2 mt-4 mb-8">
+          <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
+            {detail.table.items.length} items
+          </span>
+          <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
+            {detail.table.pity ? `Pity: ${detail.table.pity.target_rarity}` : "No pity rule"}
+          </span>
           {limits && (
-            <>
-              <span>&middot;</span>
-              <span>Up to {limits.max_pulls.toLocaleString()} pulls per audit ({user?.plan} plan)</span>
-            </>
+            <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
+              Up to {limits.max_pulls.toLocaleString()} pulls per audit &middot; {user?.plan} plan
+            </span>
           )}
         </div>
 

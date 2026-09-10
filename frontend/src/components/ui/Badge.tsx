@@ -2,7 +2,7 @@ import React from "react";
 
 type BadgeTone = "green" | "yellow" | "red" | "neutral" | "accent";
 
-const TONE_CLASSES: Record<BadgeTone, string> = {
+const SOFT_TONE_CLASSES: Record<BadgeTone, string> = {
   green: "bg-success-soft text-success",
   yellow: "bg-warning-soft text-warning",
   red: "bg-danger-soft text-danger",
@@ -10,14 +10,28 @@ const TONE_CLASSES: Record<BadgeTone, string> = {
   accent: "bg-accent-soft text-accent",
 };
 
-export const Badge: React.FC<{ tone?: BadgeTone; children: React.ReactNode; className?: string }> = ({
+// Solid, filled pills (white text) -- used where a status needs to read at
+// a glance in a dense data table, distinct from the softer tinted pills
+// used for section-level flags elsewhere.
+const SOLID_TONE_CLASSES: Record<BadgeTone, string> = {
+  green: "bg-success text-white",
+  yellow: "bg-warning text-white",
+  red: "bg-danger text-white",
+  neutral: "bg-ink-muted text-white",
+  accent: "bg-accent text-white",
+};
+
+export const Badge: React.FC<{ tone?: BadgeTone; solid?: boolean; children: React.ReactNode; className?: string }> = ({
   tone = "neutral",
+  solid = false,
   children,
   className = "",
 }) => {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${TONE_CLASSES[tone]} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.06em] ${
+        solid ? SOLID_TONE_CLASSES[tone] : SOFT_TONE_CLASSES[tone]
+      } ${className}`}
     >
       {children}
     </span>

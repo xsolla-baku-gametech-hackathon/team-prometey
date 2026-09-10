@@ -4,29 +4,33 @@
   Apple-style design tokens (see PROJECT.md section 9): neutral base,
   one confident accent, generous radius/shadow scale. Red/yellow/green
   are reserved strictly for compliance flags, never used for general UI.
+  Accent/success/danger pinned to Apple's actual system colors (system
+  blue/green/red) per the more recent, pixel-specific design pass.
 */
 @theme {
   --color-bg: #f5f5f7;
   --color-surface: #ffffff;
   --color-ink: #1d1d1f;
   --color-ink-muted: #6e6e73;
-  --color-accent: #0071e3;
-  --color-accent-hover: #0077ed;
+  --color-accent: #007aff;
+  --color-accent-hover: #0071e3;
   --color-accent-soft: #e8f2fd;
   --color-line: #d2d2d7;
+  --color-divider: #e5e5ea;
 
-  --color-success: #059669;
-  --color-success-soft: #ecfdf5;
-  --color-warning: #d97706;
-  --color-warning-soft: #fffbeb;
-  --color-danger: #dc2626;
-  --color-danger-soft: #fef2f2;
+  --color-success: #34c759;
+  --color-success-soft: #e9f9ee;
+  --color-warning: #b45309;
+  --color-warning-soft: #fff9e6;
+  --color-danger: #ff3b30;
+  --color-danger-soft: #ffece9;
 
   --radius-xl: 20px;
   --radius-lg: 16px;
   --radius-md: 12px;
 
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
 }
 
 :root {
@@ -38,6 +42,7 @@ body {
   background-color: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
