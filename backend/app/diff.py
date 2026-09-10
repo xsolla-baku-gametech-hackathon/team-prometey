@@ -172,8 +172,10 @@ def _diff_geometry(
     by_name_a = {g["mesh_name"]: g for g in geometry_a}
     by_name_b = {g["mesh_name"]: g for g in geometry_b}
 
-    added = [name for name in by_name_b if name not in by_name_a]
-    removed = [name for name in by_name_a if name not in by_name_b]
+    added = [{"mesh_name": name, "vertex_count": by_name_b[name]["vertex_count"]}
+             for name in by_name_b if name not in by_name_a]
+    removed = [{"mesh_name": name, "vertex_count": by_name_a[name]["vertex_count"]}
+               for name in by_name_a if name not in by_name_b]
 
     meshes = []
     any_approximate = False
@@ -207,8 +209,15 @@ def _diff_geometry(
         result["unchanged"] = False
         meshes.append(result)
 
-    total_vertices = sum(m["vertex_count"] for m in meshes)
-    total_changed = sum(m["changed_vertex_count"] for m in meshes)
+    # Added/removed meshes are entirely different geometry (100% changed) --
+    # their vertices must count toward the totals too, or an asset where a
+    # whole new mesh was added would silently under-report how much changed.
+    matched_total = sum(m["vertex_count"] for m in meshes)
+    matched_changed = sum(m["changed_vertex_count"] for m in meshes)
+    added_removed_total = sum(m["vertex_count"] for m in added) + sum(m["vertex_count"] for m in removed)
+
+    total_vertices = matched_total + added_removed_total
+    total_changed = matched_changed + added_removed_total
 
     return {
         "added_meshes": added,
