@@ -104,6 +104,25 @@
 .panel-title-row .panel-title {
   margin-bottom: 0;
 }
+.panel-title-spacer {
+  flex: 1;
+}
+.btn-export {
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-export:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #2563eb;
+}
 
 .field-row {
   margin-bottom: 12px;

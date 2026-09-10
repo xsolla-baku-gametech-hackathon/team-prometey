@@ -1,7 +1,8 @@
 import React from "react";
-import type { AuditResponse } from "../types";
+import type { AuditResponse, LootTable } from "../types";
 import { RateChart } from "./RateChart";
 import { PityChart } from "./PityChart";
+import { downloadComplianceReport } from "../lib/report";
 
 const STATUS_LABEL: Record<string, string> = {
   green: "Compliant",
@@ -13,7 +14,11 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`badge badge-${status}`}>{STATUS_LABEL[status] ?? status}</span>;
 }
 
-export const ResultsPanel: React.FC<{ result: AuditResponse | null; isRunning: boolean }> = ({ result, isRunning }) => {
+export const ResultsPanel: React.FC<{ result: AuditResponse | null; isRunning: boolean; table: LootTable | null }> = ({
+  result,
+  isRunning,
+  table,
+}) => {
   if (isRunning) {
     return (
       <div className="panel results-panel">
@@ -41,6 +46,12 @@ export const ResultsPanel: React.FC<{ result: AuditResponse | null; isRunning: b
         <div className="panel-title">Audit Results</div>
         {compliance && <StatusBadge status={compliance.overall_status} />}
         {blocked && <span className="badge badge-red">Blocked</span>}
+        <div className="panel-title-spacer" />
+        {table && (
+          <button className="btn-export" onClick={() => downloadComplianceReport(table, result)}>
+            Export Report
+          </button>
+        )}
       </div>
 
       {validation_issues.length > 0 && (

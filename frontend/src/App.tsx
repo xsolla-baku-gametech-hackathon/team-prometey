@@ -8,6 +8,7 @@ import type { AuditResponse, LootTable } from "./types";
 export default function App() {
   const [samples, setSamples] = useState<Record<string, LootTable>>({});
   const [result, setResult] = useState<AuditResponse | null>(null);
+  const [lastTable, setLastTable] = useState<LootTable | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [backendUp, setBackendUp] = useState<boolean | null>(null);
@@ -27,6 +28,7 @@ export default function App() {
     try {
       const res = await runAudit(table, opts);
       setResult(res);
+      setLastTable(table);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Audit failed");
       setResult(null);
@@ -52,7 +54,7 @@ export default function App() {
 
       <main className="app-main">
         <TableInput samples={samples} onRun={handleRun} isRunning={isRunning} error={error} />
-        <ResultsPanel result={result} isRunning={isRunning} />
+        <ResultsPanel result={result} isRunning={isRunning} table={lastTable} />
       </main>
     </div>
   );
