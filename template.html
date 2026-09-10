@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MeshDiff Studio Pro — Clean Edition</title>
+<title>MeshDiff Studio Pro — Fixed Edition</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -80,6 +80,13 @@
   }
   .tab-btn.active { background: var(--bg-surface); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
+  .slider-container {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-main); padding: 4px 12px; border-radius: 8px; border: 1px solid var(--border-color);
+  }
+  .slider-container label { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+  .slider-container input[type="range"] { accent-color: var(--accent); cursor: pointer; width: 140px; }
+
   .toggles { display: flex; gap: 16px; align-items: center; }
   .toggle-btn { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 500; color: var(--text-secondary); }
   .toggle-btn input { accent-color: var(--accent); }
@@ -142,6 +149,11 @@
     <button class="tab-btn active" data-view="diff">Mərkəzi Diff (İç-İçə)</button>
   </div>
 
+  <div class="slider-container">
+    <label>V1 → V2 Keçid Barı:</label>
+    <input type="range" id="morphSlider" min="0" max="100" value="100">
+  </div>
+
   <div class="toggles">
     <label class="toggle-btn"><input type="checkbox" id="toggleGhost" checked> V1 Qırmızı Kölgə</label>
     <label class="toggle-btn"><input type="checkbox" id="toggleHighlight" checked> Dəyişikliyi Vurğula</label>
@@ -157,7 +169,7 @@
       <div class="card-title">Diff Statistikası</div>
       <div class="stat-row"><span>V1 Toplam Vertex</span><span class="stat-val" id="statV1">—</span></div>
       <div class="stat-row"><span>V2 Toplam Vertex</span><span class="stat-val" id="statV2">—</span></div>
-      <div class="stat-row"><span>Dəyişən Vertex</span><span class="stat-val accent" id="statChanged">—</span></div>
+      <div class="stat-row"><span>Dəyişən Vertex (Təxmini)</span><span class="stat-val accent" id="statChanged">—</span></div>
       <div class="stat-row"><span>Ümumi Fərq (%)</span><span class="stat-val accent" id="statPct">—</span></div>
     </div>
 
@@ -255,6 +267,7 @@ function rebuildScene() {
 
   const showGhost = document.getElementById('toggleGhost').checked;
   const showHighlight = document.getElementById('toggleHighlight').checked;
+  const morphVal = parseFloat(document.getElementById('morphSlider').value) / 100;
 
   if (activeView === 'v1' && groupV1Raw) {
     scene.add(groupV1Raw.clone(true));
@@ -266,13 +279,14 @@ function rebuildScene() {
   }
 
   // V1 Ghost Mesh
+  let ghostGroup = null;
   if (groupV1Raw && showGhost) {
-    const ghostGroup = groupV1Raw.clone(true);
+    ghostGroup = groupV1Raw.clone(true);
     ghostGroup.traverse((child) => {
       if (child.isMesh) {
         child.material = child.material.clone();
         child.material.transparent = true;
-        child.material.opacity = 0.35;
+        child.material.opacity = (1 - morphVal) * 0.4 + 0.1;
         child.material.depthWrite = false;
         child.material.depthTest = false;
         child.renderOrder = 999;
@@ -282,7 +296,7 @@ function rebuildScene() {
     scene.add(ghostGroup);
   }
 
-  // V2 Diff Mesh
+  // V2 Diff & Morph Mesh
   if (groupV2Raw) {
     const diffGroup = groupV2Raw.clone(true);
     const v2Meshes = collectMeshes(diffGroup);
@@ -321,6 +335,13 @@ function rebuildScene() {
         let y2 = pos2.getY(i);
         let z2 = pos2.getZ(i);
 
+        // Morph Interpolation slider üçün
+        pos2.setXYZ(i,
+          x1 + (x2 - x1) * morphVal,
+          y1 + (y2 - y1) * morphVal,
+          z1 + (z2 - z1) * morphVal
+        );
+
         const dist = Math.sqrt((x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2);
 
         if (dist > EPSILON && showHighlight) {
@@ -334,10 +355,15 @@ function rebuildScene() {
         }
       }
 
+      meshV2.geometry.attributes.position.needsUpdate = true;
       meshV2.geometry.setAttribute('color', new THREE.BufferAttribute(newColors, 3));
       meshV2.material = meshV2.material.clone();
       meshV2.material.vertexColors = true;
       meshV2.material.needsUpdate = true;
+
+      // Opacity morph transition
+      meshV2.material.transparent = true;
+      meshV2.material.opacity = Math.max(morphVal, 0.2);
 
       changedCount += meshChanged;
       const pct = ((meshChanged / pos2.count) * 100).toFixed(1);
@@ -409,6 +435,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   });
 });
 
+document.getElementById('morphSlider').addEventListener('input', rebuildScene);
 document.getElementById('toggleGhost').addEventListener('change', rebuildScene);
 document.getElementById('toggleHighlight').addEventListener('change', rebuildScene);
 
