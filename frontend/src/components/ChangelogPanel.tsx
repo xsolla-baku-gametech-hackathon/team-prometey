@@ -242,11 +242,23 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
             )}
 
             <div className="space-y-1 pt-1">
-              {geom.added_meshes.map((name) => (
-                <DiffRow key={`add-${name}`} kind="add" label={name} detail="new mesh" onClick={click(name)} />
+              {geom.added_meshes.map((m) => (
+                <DiffRow
+                  key={`add-${m.mesh_name}`}
+                  kind="add"
+                  label={m.mesh_name}
+                  detail={`+${m.vertex_count.toLocaleString()} verts`}
+                  onClick={click(m.mesh_name)}
+                />
               ))}
-              {geom.removed_meshes.map((name) => (
-                <DiffRow key={`rem-${name}`} kind="remove" label={name} detail="removed" onClick={click(name)} />
+              {geom.removed_meshes.map((m) => (
+                <DiffRow
+                  key={`rem-${m.mesh_name}`}
+                  kind="remove"
+                  label={m.mesh_name}
+                  detail={`−${m.vertex_count.toLocaleString()} verts`}
+                  onClick={click(m.mesh_name)}
+                />
               ))}
               {changedMeshes.map((m) => {
                 const bar = meshBar(m);

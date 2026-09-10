@@ -126,7 +126,7 @@ function buildDiffModel(
   diffPayload.geometry.meshes.forEach((m) => {
     meshDiffByName[m.mesh_name] = m;
   });
-  const addedNames = new Set(diffPayload.geometry.added_meshes);
+  const addedNames = new Set(diffPayload.geometry.added_meshes.map((m) => m.mesh_name));
 
   // `Object3D.clone(true)` deep-clones the *hierarchy* only — three.js
   // does NOT clone geometry or material buffers, so without an explicit
@@ -201,15 +201,26 @@ function buildOverlayGhost(sourceModel: THREE.Group): THREE.Group {
   return ghost;
 }
 
-/** Eases the camera + its orbit target toward a world point, preserving the current viewing distance. */
-function flyCameraTo(camera: THREE.PerspectiveCamera, controls: OrbitControls, target: THREE.Vector3, frames = 40) {
+/**
+ * Eases the camera + its orbit target toward a world point. If `distance` is
+ * omitted, the camera's current distance from its target is preserved (used
+ * for a vertex click, so zoom level stays roughly "in context"); pass an
+ * explicit distance to frame a whole object (used for a mesh click).
+ */
+function flyCameraTo(
+  camera: THREE.PerspectiveCamera,
+  controls: OrbitControls,
+  target: THREE.Vector3,
+  distance?: number,
+  frames = 40
+) {
   const startTarget = controls.target.clone();
   const startPos = camera.position.clone();
   const direction = startPos.clone().sub(startTarget);
-  const distance = Math.max(direction.length(), 0.3);
+  const useDistance = distance ?? Math.max(direction.length(), 0.3);
   direction.normalize();
   const endTarget = target.clone();
-  const endPos = endTarget.clone().add(direction.multiplyScalar(distance));
+  const endPos = endTarget.clone().add(direction.multiplyScalar(useDistance));
 
   let frame = 0;
   const step = () => {
@@ -241,6 +252,16 @@ function findVertexWorldPosition(groups: (THREE.Group | null)[], meshName: strin
     if (result) return result;
   }
   return null;
+}
+
+/** A camera position + framing distance that fits a mesh's world-space bounding box, given the camera's FOV. */
+function framingFor(camera: THREE.PerspectiveCamera, box: THREE.Box3, padding = 2.4) {
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z, 0.05);
+  const fovRad = (camera.fov * Math.PI) / 180;
+  const distance = (maxDim / 2 / Math.tan(fovRad / 2)) * padding;
+  return { center, distance };
 }
 
 export const ThreeViewport: React.FC<ThreeViewportProps> = ({
@@ -521,6 +542,18 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
       flashMat.dispose();
       return;
     }
+
+    // Also fly the camera to frame this mesh, so clicking a row in the
+    // panel doesn't just flash something you have to go hunting for.
+    if (camera && controls) {
+      const box = new THREE.Box3();
+      restore.forEach(({ obj }) => box.expandByObject(obj));
+      if (!box.isEmpty()) {
+        const { center, distance } = framingFor(camera, box);
+        flyCameraTo(camera, controls, center, distance);
+      }
+    }
+
     const doRestore = () => {
       restore.forEach(({ obj, mat }) => {
         obj.material = mat;

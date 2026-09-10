@@ -70,9 +70,14 @@ export interface MeshDiffData {
   note?: string;
 }
 
+export interface AddedRemovedMesh {
+  mesh_name: string;
+  vertex_count: number;
+}
+
 export interface GeometryDiff {
-  added_meshes: string[];
-  removed_meshes: string[];
+  added_meshes: AddedRemovedMesh[];
+  removed_meshes: AddedRemovedMesh[];
   meshes: MeshDiffData[];
   geometry_exact: boolean;
   total_vertices: number;
