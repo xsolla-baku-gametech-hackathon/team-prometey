@@ -2,6 +2,8 @@
 backend/.venv/
 **/__pycache__/
 *.pyc
+backend/*.db
+.pytest_cache/
 
 # Node / frontend
 frontend/node_modules/
