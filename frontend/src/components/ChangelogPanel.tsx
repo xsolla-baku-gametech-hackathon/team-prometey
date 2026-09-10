@@ -10,17 +10,17 @@ interface ChangelogPanelProps {
 
 type LineKind = "add" | "remove" | "context";
 
-/** One line of a GitHub-style diff hunk: a leading +/-/space gutter plus colored background. */
+/** One line of a GitHub-style diff hunk: a leading +/-/space gutter plus a colored wash. */
 function DiffLine({ kind, children }: { kind: LineKind; children: React.ReactNode }) {
   const styles: Record<LineKind, string> = {
-    add: "bg-emerald-500/10 text-emerald-300 border-l-2 border-emerald-500",
-    remove: "bg-red-500/10 text-red-300 border-l-2 border-red-500",
-    context: "text-gray-500 border-l-2 border-transparent",
+    add: "bg-[#ecfdf5] text-[#059669] border-l-2 border-[#059669]",
+    remove: "bg-[#fef2f2] text-[#ef4444] border-l-2 border-[#ef4444]",
+    context: "text-[#94a3b8] border-l-2 border-transparent",
   };
   const prefix = { add: "+", remove: "-", context: " " }[kind];
   return (
     <div className={`font-mono text-[10px] leading-5 px-2 whitespace-pre-wrap break-all ${styles[kind]}`}>
-      <span className="opacity-50 mr-1.5 select-none">{prefix}</span>
+      <span className="opacity-60 mr-1.5 select-none">{prefix}</span>
       {children}
     </div>
   );
@@ -38,22 +38,22 @@ function DiffRow({
   detail?: string;
   onClick?: () => void;
 }) {
-  const border = { add: "border-l-emerald-500", remove: "border-l-red-500", context: "border-l-[#3d4758]" }[kind];
+  const border = { add: "border-l-[#059669]", remove: "border-l-[#ef4444]", context: "border-l-[#2563eb]" }[kind];
   const symbol = { add: "+", remove: "−", context: "~" }[kind];
-  const symbolColor = { add: "text-emerald-400", remove: "text-red-400", context: "text-amber-400" }[kind];
+  const symbolColor = { add: "text-[#059669]", remove: "text-[#ef4444]", context: "text-[#2563eb]" }[kind];
   return (
     <div
       onClick={onClick}
-      className={`group flex items-center gap-2 px-2 py-1.5 rounded border-l-2 ${border} bg-[#181c24] ${
-        onClick ? "cursor-pointer hover:bg-[#1f2530]" : ""
+      className={`group flex items-center gap-2 px-2 py-1.5 rounded border-l-2 ${border} bg-[#f8fafc] ${
+        onClick ? "cursor-pointer hover:bg-[#f1f5f9]" : ""
       } transition-colors`}
       title={onClick ? "Click to locate in 3D viewport" : undefined}
     >
       <span className={`font-mono text-[11px] font-bold w-3 text-center ${symbolColor}`}>{symbol}</span>
-      <span className="font-mono text-[11px] text-gray-200 truncate flex-1">{label}</span>
-      {detail && <span className="text-[10px] text-gray-500 whitespace-nowrap">{detail}</span>}
+      <span className="font-mono text-[11px] text-[#0f172a] truncate flex-1">{label}</span>
+      {detail && <span className="text-[10px] text-[#94a3b8] whitespace-nowrap">{detail}</span>}
       {onClick && (
-        <MousePointerClick className="w-3 h-3 text-gray-600 group-hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+        <MousePointerClick className="w-3 h-3 text-[#cbd5e1] group-hover:text-[#2563eb] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
       )}
     </div>
   );
@@ -69,21 +69,21 @@ function SectionHeader({
   count: number;
 }) {
   return (
-    <div className="px-3 py-2 bg-white/[0.02] border-b border-[#293040] flex items-center justify-between">
-      <div className="flex items-center gap-1.5 text-xs font-bold text-gray-200">
+    <div className="px-3 py-2 bg-[#f8fafc] border-b border-[#e2e8f0] flex items-center justify-between">
+      <div className="flex items-center gap-1.5 text-xs font-bold text-[#0f172a]">
         {icon} {title}
       </div>
-      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0b0d10] text-gray-400">{count}</span>
+      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white text-[#64748b] border border-[#e2e8f0]">{count}</span>
     </div>
   );
 }
 
 function meshBar(m: MeshDiffData) {
-  if (m.unchanged) return { widthPct: 0, colorClass: "bg-gray-600" };
-  if (!m.changed_vertex_indices && !m.unchanged) {
-    return { widthPct: 100, colorClass: "bg-blue-500" }; // topology change, no per-vertex data
+  if (m.unchanged) return { widthPct: 0, colorClass: "bg-[#cbd5e1]" };
+  if (!m.changed_vertex_indices) {
+    return { widthPct: 100, colorClass: "bg-[#2563eb]" }; // topology change, no per-vertex data
   }
-  return { widthPct: Math.min(Math.max(m.changed_vertex_percent, 0), 100), colorClass: "bg-gradient-to-r from-amber-500 to-red-500" };
+  return { widthPct: Math.min(Math.max(m.changed_vertex_percent, 0), 100), colorClass: "bg-[#2563eb]" };
 }
 
 export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMeshClick }) => {
@@ -91,11 +91,11 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
 
   if (!diffResult) {
     return (
-      <div className="w-[380px] bg-[#181c24] border-l border-[#293040] flex flex-col h-full flex-shrink-0">
-        <div className="p-3.5 border-b border-[#293040] flex items-center justify-between">
-          <span className="text-xs font-bold text-gray-200">Diff Inspector & Summary</span>
+      <div className="w-[380px] bg-white border-l border-[#e2e8f0] flex flex-col h-full flex-shrink-0">
+        <div className="p-3.5 border-b border-[#e2e8f0] flex items-center justify-between">
+          <span className="text-xs font-bold text-[#0f172a]">Diff Inspector & Summary</span>
         </div>
-        <div className="flex-1 flex items-center justify-center p-6 text-center text-xs text-gray-500">
+        <div className="flex-1 flex items-center justify-center p-6 text-center text-xs text-[#94a3b8]">
           No diff currently loaded. Select two asset versions to compute changes.
         </div>
       </div>
@@ -119,15 +119,15 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
   const click = (name: string) => (onMeshClick ? () => onMeshClick(name) : undefined);
 
   return (
-    <div className="w-[380px] bg-[#181c24] border-l border-[#293040] flex flex-col h-full flex-shrink-0 overflow-hidden">
+    <div className="w-[380px] bg-white border-l border-[#e2e8f0] flex flex-col h-full flex-shrink-0 overflow-hidden">
       {/* Header */}
-      <div className="p-3.5 border-b border-[#293040] flex items-center justify-between">
-        <span className="text-xs font-bold text-gray-200">Diff Inspector & Summary</span>
+      <div className="p-3.5 border-b border-[#e2e8f0] flex items-center justify-between">
+        <span className="text-xs font-bold text-[#0f172a]">Diff Inspector & Summary</span>
         <span
           className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
             geometry_exact
-              ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-              : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+              ? "bg-[#eff6ff] text-[#2563eb] border border-[#dbeafe]"
+              : "bg-[#fffbeb] text-[#d97706] border border-[#fde68a]"
           }`}
         >
           {geometry_exact ? "Index-Aligned Exact" : "Topology Approx"}
@@ -138,41 +138,41 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
       <div className="flex-1 overflow-y-auto p-3.5 space-y-4">
         {/* Metric Cards */}
         <div className="grid grid-cols-2 gap-2">
-          <div className="bg-[#202632] border border-[#293040] rounded-lg p-2.5">
-            <div className={`text-lg font-bold ${geom.changed_percent > 0 ? "text-amber-400" : "text-emerald-400"}`}>
+          <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-2.5">
+            <div className={`text-lg font-bold ${geom.changed_percent > 0 ? "text-[#2563eb]" : "text-[#059669]"}`}>
               {geom.changed_percent}%
             </div>
-            <div className="text-[10px] uppercase text-gray-400 font-semibold tracking-wider mt-0.5">Geometry Delta</div>
+            <div className="text-[10px] uppercase text-[#94a3b8] font-semibold tracking-wider mt-0.5">Geometry Delta</div>
           </div>
-          <div className="bg-[#202632] border border-[#293040] rounded-lg p-2.5">
-            <div className="text-lg font-bold text-gray-100">{geom.total_changed_vertices.toLocaleString()}</div>
-            <div className="text-[10px] uppercase text-gray-400 font-semibold tracking-wider mt-0.5">Changed Vertices</div>
+          <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-2.5">
+            <div className="text-lg font-bold text-[#0f172a]">{geom.total_changed_vertices.toLocaleString()}</div>
+            <div className="text-[10px] uppercase text-[#94a3b8] font-semibold tracking-wider mt-0.5">Changed Vertices</div>
           </div>
-          <div className="bg-[#202632] border border-[#293040] rounded-lg p-2.5">
-            <div className="text-lg font-bold text-gray-100">{matDeltas}</div>
-            <div className="text-[10px] uppercase text-gray-400 font-semibold tracking-wider mt-0.5">Material Deltas</div>
+          <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-2.5">
+            <div className="text-lg font-bold text-[#0f172a]">{matDeltas}</div>
+            <div className="text-[10px] uppercase text-[#94a3b8] font-semibold tracking-wider mt-0.5">Material Deltas</div>
           </div>
-          <div className="bg-[#202632] border border-[#293040] rounded-lg p-2.5">
-            <div className="text-lg font-bold text-gray-100">{hierDeltas}</div>
-            <div className="text-[10px] uppercase text-gray-400 font-semibold tracking-wider mt-0.5">Hierarchy Deltas</div>
+          <div className="bg-[#f8fafc] border border-[#e2e8f0] rounded-lg p-2.5">
+            <div className="text-lg font-bold text-[#0f172a]">{hierDeltas}</div>
+            <div className="text-[10px] uppercase text-[#94a3b8] font-semibold tracking-wider mt-0.5">Hierarchy Deltas</div>
           </div>
         </div>
 
         {/* Summary line, GitHub PR-style */}
         <div className="flex items-center gap-3 text-[11px] font-mono px-1">
-          <span className="text-gray-400">{totalMeshEntries} mesh{totalMeshEntries !== 1 ? "es" : ""}</span>
-          <span className="text-amber-400">~{changedMeshes.length} changed</span>
-          <span className="text-emerald-400">+{geom.added_meshes.length} added</span>
-          <span className="text-red-400">−{geom.removed_meshes.length} removed</span>
+          <span className="text-[#64748b]">{totalMeshEntries} mesh{totalMeshEntries !== 1 ? "es" : ""}</span>
+          <span className="text-[#2563eb]">~{changedMeshes.length} changed</span>
+          <span className="text-[#059669]">+{geom.added_meshes.length} added</span>
+          <span className="text-[#ef4444]">−{geom.removed_meshes.length} removed</span>
         </div>
 
         {/* 1. Geometry Section */}
-        <div className="bg-[#202632] border border-[#293040] rounded-lg overflow-hidden">
-          <SectionHeader icon={<Box className="w-3.5 h-3.5 text-blue-400" />} title="Geometry Breakdown" count={totalMeshEntries} />
+        <div className="bg-white border border-[#e2e8f0] rounded-lg overflow-hidden">
+          <SectionHeader icon={<Box className="w-3.5 h-3.5 text-[#2563eb]" />} title="Geometry Breakdown" count={totalMeshEntries} />
           <div className="p-3 text-xs space-y-2">
-            <div className="text-gray-400 text-[11px] leading-relaxed">{geom.summary}</div>
+            <div className="text-[#64748b] text-[11px] leading-relaxed">{geom.summary}</div>
             {!geometry_exact && (
-              <div className="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px]">
+              <div className="p-2 rounded bg-[#fffbeb] border border-[#fde68a] text-[#b45309] text-[11px]">
                 ⚠️ Topology mismatch on some meshes: displacement computed via nearest-neighbor point cloud
                 distance, not an exact index-aligned comparison.
               </div>
@@ -199,7 +199,7 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
                       }
                       onClick={click(m.mesh_name)}
                     />
-                    <div className="ml-6 mr-2 mt-0.5 mb-1 h-1 rounded bg-black/30 overflow-hidden">
+                    <div className="ml-6 mr-2 mt-0.5 mb-1 h-1 rounded bg-[#e2e8f0] overflow-hidden">
                       <div className={`h-full ${bar.colorClass}`} style={{ width: `${bar.widthPct || 100}%` }} />
                     </div>
                   </div>
@@ -211,7 +211,7 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
               <div className="pt-1">
                 <button
                   onClick={() => setShowUnchanged((v) => !v)}
-                  className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+                  className="flex items-center gap-1 text-[10px] text-[#94a3b8] hover:text-[#334155] transition-colors"
                 >
                   <ChevronRight className={`w-3 h-3 transition-transform ${showUnchanged ? "rotate-90" : ""}`} />
                   {unchangedMeshes.length} unchanged mesh{unchangedMeshes.length !== 1 ? "es" : ""}
@@ -226,15 +226,15 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
               </div>
             )}
 
-            {totalMeshEntries === 0 && <div className="text-gray-500 text-[11px]">No mesh changes detected.</div>}
+            {totalMeshEntries === 0 && <div className="text-[#94a3b8] text-[11px]">No mesh changes detected.</div>}
           </div>
         </div>
 
         {/* 2. Materials Section */}
-        <div className="bg-[#202632] border border-[#293040] rounded-lg overflow-hidden">
-          <SectionHeader icon={<Palette className="w-3.5 h-3.5 text-indigo-400" />} title="Materials & PBR Properties" count={matDeltas} />
+        <div className="bg-white border border-[#e2e8f0] rounded-lg overflow-hidden">
+          <SectionHeader icon={<Palette className="w-3.5 h-3.5 text-[#2563eb]" />} title="Materials & PBR Properties" count={matDeltas} />
           <div className="p-3 text-xs space-y-2">
-            <div className="text-gray-400 text-[11px]">{diff.materials.summary}</div>
+            <div className="text-[#64748b] text-[11px]">{diff.materials.summary}</div>
             <div className="space-y-1.5 pt-1">
               {diff.materials.added.map((m) => (
                 <DiffRow key={`madd-${m.name}`} kind="add" label={m.name} />
@@ -243,8 +243,8 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
                 <DiffRow key={`mrem-${m.name}`} kind="remove" label={m.name} />
               ))}
               {diff.materials.changed.map((m) => (
-                <div key={m.name} className="rounded overflow-hidden border border-[#293040]/60">
-                  <div className="px-2 py-1 bg-[#181c24] font-semibold text-amber-400 text-[11px] font-mono">~ {m.name}</div>
+                <div key={m.name} className="rounded overflow-hidden border border-[#e2e8f0]">
+                  <div className="px-2 py-1 bg-[#f8fafc] font-semibold text-[#2563eb] text-[11px] font-mono">~ {m.name}</div>
                   <div>
                     {Object.entries(m.changes).map(([k, v]) => (
                       <React.Fragment key={k}>
@@ -256,17 +256,17 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
                 </div>
               ))}
             </div>
-            {matDeltas === 0 && <div className="text-gray-500 text-[11px]">No material changes detected.</div>}
+            {matDeltas === 0 && <div className="text-[#94a3b8] text-[11px]">No material changes detected.</div>}
           </div>
         </div>
 
         {/* 3. Hierarchy Section */}
-        <div className="bg-[#202632] border border-[#293040] rounded-lg overflow-hidden">
-          <SectionHeader icon={<GitFork className="w-3.5 h-3.5 text-emerald-400" />} title="Hierarchy & Transforms" count={hierDeltas} />
+        <div className="bg-white border border-[#e2e8f0] rounded-lg overflow-hidden">
+          <SectionHeader icon={<GitFork className="w-3.5 h-3.5 text-[#2563eb]" />} title="Hierarchy & Transforms" count={hierDeltas} />
           <div className="p-3 text-xs space-y-2">
-            <div className="text-gray-400 text-[11px]">{diff.hierarchy.summary}</div>
+            <div className="text-[#64748b] text-[11px]">{diff.hierarchy.summary}</div>
             {diff.hierarchy.note && (
-              <div className="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px]">
+              <div className="p-2 rounded bg-[#fffbeb] border border-[#fde68a] text-[#b45309] text-[11px]">
                 ⚠️ {diff.hierarchy.note}
               </div>
             )}
@@ -279,15 +279,15 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
                 <DiffRow key={`nrem-${n.name}`} kind="remove" label={n.name} detail="removed" />
               ))}
               {diff.hierarchy.reparented.map((n) => (
-                <div key={`repar-${n.name}`} className="rounded overflow-hidden border border-[#293040]/60">
-                  <div className="px-2 py-1 bg-[#181c24] font-semibold text-gray-200 text-[11px] font-mono">~ {n.name} (reparented)</div>
+                <div key={`repar-${n.name}`} className="rounded overflow-hidden border border-[#e2e8f0]">
+                  <div className="px-2 py-1 bg-[#f8fafc] font-semibold text-[#0f172a] text-[11px] font-mono">~ {n.name} (reparented)</div>
                   <DiffLine kind="remove">{`parent: ${n.old_parent ?? "root"}`}</DiffLine>
                   <DiffLine kind="add">{`parent: ${n.new_parent ?? "root"}`}</DiffLine>
                 </div>
               ))}
               {diff.hierarchy.moved.map((n) => (
-                <div key={`moved-${n.name}`} className="rounded overflow-hidden border border-[#293040]/60">
-                  <div className="px-2 py-1 bg-[#181c24] font-semibold text-gray-200 text-[11px] font-mono">~ {n.name} (transform)</div>
+                <div key={`moved-${n.name}`} className="rounded overflow-hidden border border-[#e2e8f0]">
+                  <div className="px-2 py-1 bg-[#f8fafc] font-semibold text-[#0f172a] text-[11px] font-mono">~ {n.name} (transform)</div>
                   {n.old_translation && n.new_translation && (
                     <>
                       <DiffLine kind="remove">{`translation: [${n.old_translation.join(", ")}]`}</DiffLine>
@@ -304,7 +304,7 @@ export const ChangelogPanel: React.FC<ChangelogPanelProps> = ({ diffResult, onMe
               ))}
             </div>
 
-            {hierDeltas === 0 && <div className="text-gray-500 text-[11px]">No transform or node hierarchy changes.</div>}
+            {hierDeltas === 0 && <div className="text-[#94a3b8] text-[11px]">No transform or node hierarchy changes.</div>}
           </div>
         </div>
       </div>
