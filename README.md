@@ -77,7 +77,7 @@ npm install
 
 ### Environment variables
 
-None are required to run locally — the backend falls back to a dev-only JWT secret automatically. For anything beyond localhost, set:
+None are required to run locally — the backend falls back to a dev-only JWT secret automatically. For anything beyond localhost, copy `backend/.env.example` and set:
 
 ```bash
 export LOOT_AUDITOR_JWT_SECRET="a long random value"   # required outside localhost
@@ -87,9 +87,9 @@ export LOOT_AUDITOR_DB_PATH="./loot_auditor.db"          # optional, defaults sh
 ## Run
 
 ```bash
-# Terminal 1 — backend on :8000
+# Terminal 1 — backend on :8000 (--reload so route/model edits take effect without a manual restart)
 cd backend
-.venv/bin/python3 -m uvicorn app.main:app --port 8000
+.venv/bin/python3 -m uvicorn app.main:app --port 8000 --reload
 
 # Terminal 2 — frontend on :5173
 cd frontend
@@ -105,7 +105,9 @@ cd backend
 .venv/bin/python3 -m pytest tests/ -v
 ```
 
-17/17 should pass — the bug-injection self-test suite, proving the validator, simulator, and compliance diff each catch what they claim to. This suite exercises the core audit logic directly (`app.schema`/`validator`/`simulate`/`compliance`), independent of the API/auth layer built on top of it.
+32/32 should pass, across two files:
+- `test_auditor.py` (17 tests) — the bug-injection self-test suite, proving the validator, simulator, and compliance diff each catch what they claim to, exercising `app.schema`/`validator`/`simulate`/`compliance` directly.
+- `test_api.py` (15 tests) — drives the actual HTTP surface with FastAPI's `TestClient` against an isolated in-memory SQLite database per test: signup/login, cross-user ownership isolation (user B gets a 404 touching user A's table, not their data), and plan-gated limits (free tier's 1-table cap, pull-count cap, export gate, last-run-only history).
 
 ## Build (frontend)
 
@@ -129,8 +131,10 @@ backend/
     plans.py                       free/studio/enterprise limits
     main.py                          FastAPI app: auth, table CRUD, audit, history
   samples/              bundled demo loot tables (clean + buggy)
+  .env.example          documents LOOT_AUDITOR_JWT_SECRET / LOOT_AUDITOR_DB_PATH
   tests/
     test_auditor.py       bug-injection self-test suite (core logic only)
+    test_api.py              HTTP-layer tests: auth, ownership isolation, plan gating
 
 frontend/
   src/
@@ -138,11 +142,13 @@ frontend/
     lib/
       api.ts                      fetch wrapper, attaches the JWT to every request
       auth.tsx                       AuthContext (login/signup/logout, current user)
-      report.ts                        client-side compliance report export
+      report.ts                        client-side compliance report export (CSV + printable PDF)
     components/
       ui/                                Button, Card, Badge, Input, NavItem
       AppShell.tsx                        left-nav layout for authenticated pages
       ProtectedRoute.tsx                    redirects to /login when logged out
+      LootTableEditor.tsx                     GUI item/pity editor, synced with the raw JSON view
+      CompareRuns.tsx                           side-by-side diff between two saved audit runs
       AuditResults.tsx, RateChart.tsx, PityChart.tsx
     pages/                                   one file per route
     App.tsx                                    React Router setup
@@ -165,4 +171,6 @@ frontend/
 - No real payment processing — plan gating is enforced in-app but not billed.
 - Tolerance/compliance logic is a single configurable threshold, not region-specific (Belgium vs. China vs. Korea have different actual disclosure rules).
 - Auth is minimal (email/password only, no SSO) — fine for a hackathon demo, not enterprise-ready as-is.
+- PDF export opens a print-formatted page and relies on the browser's own "Save as PDF" print destination rather than generating a PDF server-side — works everywhere without a new dependency, but isn't a one-click file.
+- No side-by-side diff between two different *tables* (only between two audit *runs* of the same table) — editing a table in place and re-running is the supported way to see whether a fix worked.
 - Realistic path to market is likely as a compliance module inside a larger live-ops/analytics platform rather than a standalone company at scale — still a legitimate standalone SaaS at small scale (indie/mid studios), which is the story worth telling to judges.
