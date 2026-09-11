@@ -129,7 +129,24 @@ None are required to run locally — the backend falls back to a dev-only JWT se
 export LOOT_AUDITOR_JWT_SECRET="a long random value"   # required outside localhost
 export LOOT_AUDITOR_DB_PATH="./loot_auditor.db"          # optional, defaults shown
 export TRUELOOT_ADMIN_EMAILS="you@yourteam.com"            # optional, grants /admin access -- see "Admin / Ops" below
+export TRUELOOT_DEMO_PASSWORD="a password for demo@example.com"  # optional, see "Demo account" below
 ```
+
+### Demo account
+
+To skip manually recreating the buggy/fixed tables before a demo, seed a
+`demo@example.com` account (Studio plan) with both tables already saved
+and audited:
+
+```bash
+cd backend
+.venv/bin/python3 -m app.seed_demo
+```
+
+Prints the account's email and confirms both audits ran; the password
+comes from `TRUELOOT_DEMO_PASSWORD` (defaults to `demo-loot-2026` if
+unset). Safe to re-run -- it resets both tables' audit history to a
+single fresh, deterministic run each time.
 
 ## Run
 
