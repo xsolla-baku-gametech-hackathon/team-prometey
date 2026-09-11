@@ -66,7 +66,7 @@ export const DashboardPage: React.FC = () => {
         </div>
 
         {atLimit && (
-          <Card className="p-4 mb-6 bg-accent-soft border-accent/20">
+          <Card className="p-4 mb-6 bg-accent-soft">
             <p className="text-[13.5px] text-ink">
               You've reached your {user?.plan} plan's saved-table limit.{" "}
               <Link to="/pricing" className="text-accent font-medium hover:underline">
@@ -93,7 +93,7 @@ export const DashboardPage: React.FC = () => {
             {tables.map((t) => (
               <Card
                 key={t.id}
-                className="p-5 cursor-pointer hover:border-accent/40 transition-colors group"
+                className="p-5 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_4px_16px_-4px_rgba(0,0,0,0.12)] group"
                 onClick={() => navigate(`/tables/${t.id}`)}
               >
                 <div className="flex items-start justify-between gap-2">
