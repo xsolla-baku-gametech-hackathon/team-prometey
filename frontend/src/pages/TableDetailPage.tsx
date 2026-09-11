@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { Zap, Trash2, ChevronDown, Pencil, X } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { Zap, Trash2, ChevronRight, Pencil, X } from "lucide-react";
 import { AppShell } from "../components/AppShell";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { AuditResults } from "../components/AuditResults";
 import { LootTableEditor } from "../components/LootTableEditor";
-import { CompareRuns } from "../components/CompareRuns";
 import { deleteTable, fetchHistory, fetchPlans, fetchTable, runAudit, updateTable } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { AuditRunOut, LootTable, PlanLimits, TableDetail } from "../types";
@@ -21,8 +20,6 @@ export const TableDetailPage: React.FC = () => {
   const [limits, setLimits] = useState<PlanLimits | null>(null);
   const [result, setResult] = useState<AuditRunOut | null>(null);
   const [history, setHistory] = useState<AuditRunOut[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [showCompare, setShowCompare] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -211,47 +208,14 @@ export const TableDetailPage: React.FC = () => {
           </>
         )}
 
-        {!isEditing && history.length > 1 && (
-          <div className="mb-6">
-            <div className="flex items-center gap-4 mb-3">
-              <button
-                onClick={() => setShowHistory((v) => !v)}
-                className="flex items-center gap-1.5 text-[13px] font-medium text-ink-muted hover:text-ink cursor-pointer"
-              >
-                <ChevronDown className={`w-4 h-4 transition-transform ${showHistory ? "rotate-180" : ""}`} />
-                {limits?.full_history
-                  ? `History (${history.length} runs)`
-                  : "Full history requires the Studio or Enterprise plan"}
-              </button>
-              {limits?.full_history && (
-                <button
-                  onClick={() => setShowCompare((v) => !v)}
-                  className={`text-[13px] font-medium cursor-pointer ${showCompare ? "text-accent" : "text-ink-muted hover:text-ink"}`}
-                >
-                  Compare runs
-                </button>
-              )}
-            </div>
-
-            {showCompare && limits?.full_history && <CompareRuns runs={history} />}
-
-            {showHistory && limits?.full_history && (
-              <div className="flex flex-col gap-2">
-                {history.map((run) => (
-                  <button
-                    key={run.id}
-                    onClick={() => setResult(run)}
-                    className={`text-left rounded-md border px-3.5 py-2.5 text-[13px] cursor-pointer transition-colors ${
-                      result?.id === run.id ? "border-accent bg-accent-soft" : "border-line hover:bg-bg"
-                    }`}
-                  >
-                    {new Date(run.created_at).toLocaleString()} --{" "}
-                    {run.blocked ? "blocked" : run.compliance?.overall_status ?? "unknown"}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        {!isEditing && history.length > 0 && (
+          <Link
+            to={`/tables/${id}/history`}
+            className="inline-flex items-center gap-1 text-[13.5px] font-medium text-ink-muted hover:text-ink mb-6"
+          >
+            {limits?.full_history ? `View audit history (${history.length} runs)` : "View audit history"}
+            <ChevronRight className="w-4 h-4" />
+          </Link>
         )}
       </div>
     </AppShell>
