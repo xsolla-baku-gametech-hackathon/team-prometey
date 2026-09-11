@@ -1,5 +1,5 @@
 """
-Loot Table Balance Auditor API -- multi-user SaaS shape (PROJECT.md section 8).
+TrueLoot API -- multi-user SaaS shape (PROJECT.md section 8).
 
     POST /auth/signup                     create an account
     POST /auth/login                      get a JWT
@@ -8,20 +8,27 @@ Loot Table Balance Auditor API -- multi-user SaaS shape (PROJECT.md section 8).
     GET    /tables                        list the current user's saved tables
     POST   /tables                        save a new loot table (plan-gated count)
     GET    /tables/{id}                   table detail (config)
+    PUT    /tables/{id}                   overwrite a saved table's name/config
     DELETE /tables/{id}                   remove a saved table
 
     POST /tables/{id}/audit               validate + simulate + compliance-check,
                                            persist the run (plan-gated pull count)
     GET  /tables/{id}/history             past runs for a table (free tier: latest only)
 
+    GET   /admin/users                    list every user + their table count (admin only)
+    PATCH /admin/users/{id}/plan          change a user's plan (admin only)
+
     GET /samples                          bundled demo tables, for "start from a template"
     GET /plans                            plan tiers + limits, for the pricing page
     GET /health                           liveness check
 
-Every /tables and /auth-adjacent route (other than signup/login) requires a
-bearer JWT. Core audit logic (schema/validator/simulate/compliance) is
-untouched from the original single-page build -- this layer only adds
-persistence, ownership, and plan limits around it.
+Every /tables, /admin, and /auth-adjacent route (other than signup/login)
+requires a bearer JWT; /admin/* additionally requires the user's is_admin
+flag (see app.auth.sync_admin_flag -- admin access is an env-configured
+email allowlist, not a self-serve role). Core audit logic (schema/
+validator/simulate/compliance) is untouched from the original single-page
+build -- this layer only adds persistence, ownership, and plan limits
+around it.
 """
 
 from __future__ import annotations
@@ -34,7 +41,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from app.auth import create_access_token, get_current_user, hash_password, verify_password
+from app.auth import (
+    create_access_token,
+    get_current_admin_user,
+    get_current_user,
+    hash_password,
+    sync_admin_flag,
+    verify_password,
+)
 from app.compliance import DEFAULT_TOLERANCE, ComplianceReport, compute_compliance
 from app.db import get_session, init_db
 from app.db_models import AuditRun, LootTableRecord, User
@@ -45,7 +59,7 @@ from app.validator import Issue, has_blocking_errors, validate_table
 
 SAMPLES_DIR = Path(__file__).parent.parent / "samples"
 
-app = FastAPI(title="Loot Table Balance Auditor")
+app = FastAPI(title="TrueLoot")
 
 # Wide-open CORS: stateless-per-request API auth (bearer JWT, no cookies),
 # and the frontend runs on a different port/origin in dev and possibly a
@@ -99,6 +113,7 @@ class UserOut(BaseModel):
     id: str
     email: str
     plan: str
+    is_admin: bool
 
 
 class AuthResponse(BaseModel):
@@ -107,7 +122,7 @@ class AuthResponse(BaseModel):
 
 
 def _user_out(user: User) -> UserOut:
-    return UserOut(id=user.id, email=user.email, plan=user.plan)
+    return UserOut(id=user.id, email=user.email, plan=user.plan, is_admin=user.is_admin)
 
 
 @app.post("/auth/signup", response_model=AuthResponse)
@@ -119,6 +134,7 @@ def signup(req: SignupRequest, db: Session = Depends(get_session)) -> AuthRespon
     db.add(user)
     db.commit()
     db.refresh(user)
+    user = sync_admin_flag(user, db)
     return AuthResponse(access_token=create_access_token(user), user=_user_out(user))
 
 
@@ -127,6 +143,7 @@ def login(req: LoginRequest, db: Session = Depends(get_session)) -> AuthResponse
     user = db.query(User).filter(User.email == req.email).first()
     if user is None or not verify_password(req.password, user.password_hash):
         raise HTTPException(401, "Invalid email or password.")
+    user = sync_admin_flag(user, db)
     return AuthResponse(access_token=create_access_token(user), user=_user_out(user))
 
 
@@ -369,3 +386,64 @@ def get_history(
         )
         for run in runs
     ]
+
+
+# ── Admin (ops dashboard) ───────────────────────────────────────────────
+#
+# Not a self-serve role -- access comes from the TRUELOOT_ADMIN_EMAILS
+# allowlist (see app.auth.sync_admin_flag). This is the internal tool that
+# makes the pricing page's "Upgrade" / "Contact Sales" buttons real: since
+# there's no payment processor wired up (PROJECT.md section 4), a manual
+# plan change here is how a sales-assisted upgrade actually takes effect.
+
+
+class AdminUserOut(BaseModel):
+    id: str
+    email: str
+    plan: str
+    is_admin: bool
+    created_at: str
+    table_count: int
+
+
+class AdminPlanUpdateRequest(BaseModel):
+    plan: str
+
+
+def _admin_user_out(user: User) -> AdminUserOut:
+    return AdminUserOut(
+        id=user.id,
+        email=user.email,
+        plan=user.plan,
+        is_admin=user.is_admin,
+        created_at=user.created_at.isoformat(),
+        table_count=len(user.tables),
+    )
+
+
+@app.get("/admin/users", response_model=list[AdminUserOut])
+def admin_list_users(
+    admin: User = Depends(get_current_admin_user), db: Session = Depends(get_session)
+) -> list[AdminUserOut]:
+    users = db.query(User).order_by(User.created_at.desc()).all()
+    return [_admin_user_out(u) for u in users]
+
+
+@app.patch("/admin/users/{user_id}/plan", response_model=AdminUserOut)
+def admin_update_user_plan(
+    user_id: str,
+    req: AdminPlanUpdateRequest,
+    admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_session),
+) -> AdminUserOut:
+    if req.plan not in PLAN_LIMITS:
+        raise HTTPException(422, f"Unknown plan '{req.plan}'. Must be one of: {', '.join(PLAN_LIMITS)}.")
+
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(404, "User not found.")
+
+    user.plan = req.plan
+    db.commit()
+    db.refresh(user)
+    return _admin_user_out(user)

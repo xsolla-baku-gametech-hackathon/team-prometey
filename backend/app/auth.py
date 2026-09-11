@@ -24,7 +24,29 @@ SECRET_KEY = os.environ.get("LOOT_AUDITOR_JWT_SECRET", "dev-only-insecure-secret
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 24 * 7
 
+# Admin access is an env-configured allowlist, not a signup option or a
+# separate role-management UI -- the standard early-startup pattern of "an
+# operator edits a config value" before it's worth building real RBAC.
+_ADMIN_EMAILS = {
+    e.strip().lower() for e in os.environ.get("TRUELOOT_ADMIN_EMAILS", "").split(",") if e.strip()
+}
+
 security = HTTPBearer()
+
+
+def sync_admin_flag(user: User, db: Session) -> User:
+    """Promotes a user to admin if their email is in TRUELOOT_ADMIN_EMAILS.
+
+    Called on signup and login so adding an email to the allowlist takes
+    effect the next time that person logs in -- no migration script, no
+    separate admin-creation flow.
+    """
+    should_be_admin = user.email.lower() in _ADMIN_EMAILS
+    if should_be_admin and not user.is_admin:
+        user.is_admin = True
+        db.commit()
+        db.refresh(user)
+    return user
 
 
 def hash_password(password: str) -> str:
@@ -55,3 +77,9 @@ def get_current_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User no longer exists")
     return user
+
+
+def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return current_user

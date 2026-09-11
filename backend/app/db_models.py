@@ -30,6 +30,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     plan: Mapped[str] = mapped_column(String, nullable=False, default="free")  # "free" | "studio" | "enterprise"
+    # Ops/admin access -- bootstrapped via the TRUELOOT_ADMIN_EMAILS env var
+    # (see app.auth.sync_admin_flag), not a self-serve signup option.
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
     tables: Mapped[list["LootTableRecord"]] = relationship(back_populates="owner", cascade="all, delete-orphan")

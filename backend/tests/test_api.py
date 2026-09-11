@@ -249,3 +249,73 @@ def test_export_is_gated_off_the_free_plan(client: TestClient):
     assert plans["free"]["export"] is False
     assert plans["studio"]["export"] is True
     assert plans["enterprise"]["export"] is True
+
+
+# ── Admin ────────────────────────────────────────────────────────────────
+
+
+def test_signup_grants_admin_when_email_is_allowlisted(client: TestClient, monkeypatch):
+    import app.auth as auth_module
+
+    monkeypatch.setattr(auth_module, "_ADMIN_EMAILS", {"admin@example.com"})
+    body = signup(client, "admin@example.com")
+    assert body["user"]["is_admin"] is True
+
+    other = signup(client, "regular@example.com")
+    assert other["user"]["is_admin"] is False
+
+
+def test_login_retroactively_grants_admin_when_added_to_allowlist(client: TestClient, monkeypatch):
+    import app.auth as auth_module
+
+    body = signup(client, "future-admin@example.com")
+    assert body["user"]["is_admin"] is False
+
+    monkeypatch.setattr(auth_module, "_ADMIN_EMAILS", {"future-admin@example.com"})
+    res = client.post("/auth/login", json={"email": "future-admin@example.com", "password": "testpass123"})
+    assert res.json()["user"]["is_admin"] is True
+
+
+def test_admin_routes_reject_non_admin_users(client: TestClient):
+    token = signup(client)["access_token"]
+    assert client.get("/admin/users", headers=auth_headers(token)).status_code == 403
+    assert (
+        client.patch("/admin/users/whatever/plan", json={"plan": "studio"}, headers=auth_headers(token)).status_code
+        == 403
+    )
+
+
+def test_admin_can_list_users_and_change_plans(client: TestClient, monkeypatch):
+    import app.auth as auth_module
+
+    monkeypatch.setattr(auth_module, "_ADMIN_EMAILS", {"admin@example.com"})
+    admin_token = signup(client, "admin@example.com")["access_token"]
+    regular = signup(client, "regular@example.com")
+
+    listing = client.get("/admin/users", headers=auth_headers(admin_token))
+    assert listing.status_code == 200
+    emails = {u["email"] for u in listing.json()}
+    assert {"admin@example.com", "regular@example.com"} <= emails
+
+    updated = client.patch(
+        f"/admin/users/{regular['user']['id']}/plan", json={"plan": "studio"}, headers=auth_headers(admin_token)
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["plan"] == "studio"
+
+    # The change is real, not just echoed back -- the affected user sees it too.
+    me = client.get("/user/me", headers=auth_headers(regular["access_token"]))
+    assert me.json()["plan"] == "studio"
+
+
+def test_admin_plan_update_rejects_unknown_plan(client: TestClient, monkeypatch):
+    import app.auth as auth_module
+
+    monkeypatch.setattr(auth_module, "_ADMIN_EMAILS", {"admin@example.com"})
+    admin_token = signup(client, "admin@example.com")["access_token"]
+    regular = signup(client, "regular@example.com")
+
+    res = client.patch(
+        f"/admin/users/{regular['user']['id']}/plan", json={"plan": "gold"}, headers=auth_headers(admin_token)
+    )
+    assert res.status_code == 422
