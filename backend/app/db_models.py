@@ -72,6 +72,10 @@ class AuditRun(Base):
     pull_count: Mapped[int] = mapped_column(Integer, nullable=False)
     overall_status: Mapped[str] = mapped_column(String, nullable=False)  # "green" | "yellow" | "red" -- for the dashboard's status dot
     blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Which regional compliance rule pack (app.regions) this run was judged
+    # against -- see db.py's init_db for how existing SQLite files pick up
+    # this column without a migrations tool.
+    region: Mapped[str] = mapped_column(String, nullable=False, default="global")
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow)
 
     loot_table: Mapped[LootTableRecord] = relationship(back_populates="audit_runs")
