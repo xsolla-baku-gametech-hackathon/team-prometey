@@ -13,6 +13,12 @@ import type {
 } from "../types";
 
 const getApiBase = () => {
+  // Set at build time (e.g. `VITE_API_BASE_URL=https://api.example.com npm run build`)
+  // for deployments where the frontend and backend aren't on the same host --
+  // see the README's Deploy section. Falls back to same-hostname:8000 so
+  // local dev needs zero configuration.
+  const configured = import.meta.env.VITE_API_BASE_URL;
+  if (configured) return configured.replace(/\/$/, "");
   if (typeof window !== "undefined") {
     return `${window.location.protocol}//${window.location.hostname || "localhost"}:8000`;
   }
