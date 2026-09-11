@@ -16,8 +16,8 @@ export const Input: React.FC<InputProps> = ({ label, hint, className = "", id, .
       )}
       <input
         id={inputId}
-        className={`w-full rounded-md border border-line bg-surface px-3.5 py-2.5 text-[14px] text-ink
-          outline-none transition-colors focus:border-accent placeholder:text-ink-muted/60 ${className}`}
+        className={`w-full rounded-[10px] bg-bg px-[14px] py-[11px] text-[14px] text-ink
+          outline-none transition-shadow focus:ring-4 focus:ring-accent/[0.18] placeholder:text-ink-tertiary ${className}`}
         {...rest}
       />
       {hint && <span className="text-[12px] text-ink-muted">{hint}</span>}
@@ -41,8 +41,8 @@ export const Textarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement
       )}
       <textarea
         id={inputId}
-        className={`w-full rounded-md border border-line bg-surface px-3.5 py-2.5 text-[13px] font-mono text-ink
-          outline-none transition-colors focus:border-accent resize-y ${className}`}
+        className={`w-full rounded-[10px] bg-bg px-[14px] py-[11px] text-[13px] font-mono text-ink
+          outline-none transition-shadow focus:ring-4 focus:ring-accent/[0.18] resize-y ${className}`}
         {...rest}
       />
     </div>
