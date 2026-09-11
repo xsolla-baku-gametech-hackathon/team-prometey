@@ -145,14 +145,6 @@ export const TableDetailPage: React.FC = () => {
             <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
               {detail.table.items.length} items
             </span>
-            <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
-              {detail.table.pity ? `Pity: ${detail.table.pity.target_rarity}` : "No pity rule"}
-            </span>
-            {limits && (
-              <span className="text-[11px] font-medium uppercase tracking-[0.05em] text-ink-muted bg-bg border border-line rounded-full px-3 py-1">
-                Up to {limits.max_pulls.toLocaleString()} pulls per audit &middot; {user?.plan} plan
-              </span>
-            )}
           </div>
         )}
 
