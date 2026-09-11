@@ -209,7 +209,7 @@ export const LootTableEditor: React.FC<{ jsonText: string; onChange: (text: stri
               <div className="flex flex-col gap-1 flex-1 min-w-[110px]">
                 <span className="text-[11px] text-ink-muted">Item ID</span>
                 <input
-                  className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+                  className="w-full rounded-[10px] bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:ring-4 focus:ring-accent/[0.18] transition-shadow"
                   value={newItem.id}
                   onChange={(e) => setNewItem((s) => ({ ...s, id: e.target.value }))}
                   placeholder="legendary_sword"
@@ -218,7 +218,7 @@ export const LootTableEditor: React.FC<{ jsonText: string; onChange: (text: stri
               <div className="flex flex-col gap-1 flex-1 min-w-[90px]">
                 <span className="text-[11px] text-ink-muted">Rarity</span>
                 <input
-                  className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+                  className="w-full rounded-[10px] bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:ring-4 focus:ring-accent/[0.18] transition-shadow"
                   value={newItem.rarity}
                   onChange={(e) => setNewItem((s) => ({ ...s, rarity: e.target.value }))}
                   placeholder="legendary"
@@ -230,7 +230,7 @@ export const LootTableEditor: React.FC<{ jsonText: string; onChange: (text: stri
                   type="number"
                   min={0}
                   step="any"
-                  className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+                  className="w-full rounded-[10px] bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:ring-4 focus:ring-accent/[0.18] transition-shadow"
                   value={newItem.weight}
                   onChange={(e) => setNewItem((s) => ({ ...s, weight: e.target.value }))}
                   placeholder="10"
@@ -243,7 +243,7 @@ export const LootTableEditor: React.FC<{ jsonText: string; onChange: (text: stri
                   min={0}
                   max={100}
                   step="any"
-                  className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+                  className="w-full rounded-[10px] bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:ring-4 focus:ring-accent/[0.18] transition-shadow"
                   value={newItem.rate}
                   onChange={(e) => setNewItem((s) => ({ ...s, rate: e.target.value }))}
                   placeholder="optional"
@@ -275,7 +275,7 @@ export const LootTableEditor: React.FC<{ jsonText: string; onChange: (text: stri
               <div className="flex flex-col gap-1 flex-1 min-w-[110px]">
                 <span className="text-[11px] text-ink-muted">Target rarity</span>
                 <input
-                  className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+                  className="w-full rounded-[10px] bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:ring-4 focus:ring-accent/[0.18] transition-shadow"
                   value={pity.target_rarity}
                   onChange={(e) => updatePity({ target_rarity: e.target.value })}
                   placeholder="legendary"
@@ -287,7 +287,7 @@ export const LootTableEditor: React.FC<{ jsonText: string; onChange: (text: stri
                   type="number"
                   min={1}
                   step="1"
-                  className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
+                  className="w-full rounded-[10px] bg-surface px-2.5 py-1.5 text-[13px] outline-none focus:ring-4 focus:ring-accent/[0.18] transition-shadow"
                   value={pity.guaranteed_within_pulls}
                   onChange={(e) => updatePity({ guaranteed_within_pulls: Number(e.target.value) })}
                 />
