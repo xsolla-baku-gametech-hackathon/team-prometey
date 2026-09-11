@@ -1,83 +1,117 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Boxes, ShieldCheck, LineChart, Timer, Scale, ArrowRight } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
-import { Badge } from "../components/ui/Badge";
+import { StatusDot } from "../components/ui/Badge";
+import { LiveAuditPreview } from "../components/LiveAuditPreview";
+import { RegulatoryCoverage } from "../components/RegulatoryCoverage";
+import { runDemoAudit } from "../lib/api";
+import type { DemoAuditResult } from "../types";
 
-const FEATURES = [
+type LiveKey = "validation" | "simulation" | "pity";
+
+const FEATURES: { icon: React.ElementType; title: string; body: string; liveKey: LiveKey }[] = [
   {
     icon: ShieldCheck,
     title: "Static validation",
     body: "Duplicate ids, unreachable items, drifting advertised rates, broken pity configs -- caught before you ever run a pull.",
+    liveKey: "validation",
   },
   {
     icon: LineChart,
     title: "Monte Carlo simulation",
     body: "Up to 5,000,000 simulated pulls measure your real drop rates, with a proper Bonferroni-corrected significance test -- not just an eyeballed percentage.",
+    liveKey: "simulation",
   },
   {
     icon: Timer,
     title: "Pity that's actually verified",
     body: "We check whether your guaranteed-pull promise really holds, not just whether the number looks right.",
+    liveKey: "pity",
   },
 ];
 
 const PROOF_STATS = [
-  { value: "51", label: "automated tests" },
+  { value: "54", label: "automated tests" },
   { value: "5", label: "region rule packs" },
   { value: "5M", label: "pulls per audit" },
   { value: "95%", label: "confidence intervals" },
 ];
 
-const PREVIEW_ROWS = [
-  { item: "legendary_sword", advertised: "1.00%", simulated: "1.41%", status: "red" as const },
-  { item: "epic_sword", advertised: "5.00%", simulated: "4.98%", status: "green" as const },
-  { item: "rare_sword", advertised: "25.00%", simulated: "25.01%", status: "green" as const },
-];
+/** Live status footer for a feature card -- populated from a real POST /demo/audit result, never a scripted or incrementing fake number. Renders nothing until the visitor actually runs the demo. */
+const LiveNote: React.FC<{ liveKey: LiveKey; result: DemoAuditResult | null; isRunning: boolean }> = ({
+  liveKey,
+  result,
+  isRunning,
+}) => {
+  if (liveKey === "simulation") {
+    const pulls = result?.simulation?.num_pulls;
+    return (
+      <div className="mt-4 pt-4 border-t border-line/70">
+        <div className="h-1.5 rounded-full bg-bg overflow-hidden">
+          <div
+            className="h-full rounded-full bg-accent transition-[width] duration-[900ms] ease-out"
+            style={{ width: isRunning || pulls ? "100%" : "0%" }}
+          />
+        </div>
+        <p className="text-[11.5px] text-ink-tertiary mt-2">
+          {pulls ? `${pulls.toLocaleString()} pulls completed just now` : "Run the demo above to see this live"}
+        </p>
+      </div>
+    );
+  }
 
-/** Small non-interactive echo of the real Item Compliance table (see AuditResults.tsx) -- gives the hero a concrete product preview instead of an abstract illustration. */
-const ProductPreview: React.FC = () => (
-  <div
-    className="w-full max-w-[560px] rounded-2xl bg-material-regular backdrop-blur-[30px] backdrop-saturate-[180%]
-      shadow-[0_30px_80px_-20px_rgba(0,0,0,0.25)] p-5 text-left"
-  >
-    <div className="flex items-center justify-between mb-4">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">Item Compliance</span>
-      <Badge tone="red" solid>
-        Non-Compliant
-      </Badge>
+  if (!result) return null;
+
+  if (liveKey === "validation") {
+    const count = result.validation_issues.length;
+    return (
+      <div className="mt-4 pt-4 border-t border-line/70 flex items-center gap-2">
+        <StatusDot tone={count > 0 ? "yellow" : "green"} />
+        <p className="text-[11.5px] text-ink-muted">
+          {count > 0 ? `${count} issue${count === 1 ? "" : "s"} caught just now` : "No issues found just now"}
+        </p>
+      </div>
+    );
+  }
+
+  // pity
+  const flag = result.compliance?.pity_flag;
+  if (!flag) return null;
+  return (
+    <div className="mt-4 pt-4 border-t border-line/70 flex items-center gap-2">
+      <StatusDot tone={flag.status === "green" ? "green" : "red"} />
+      <p className="text-[11.5px] text-ink-muted">{flag.status === "green" ? "Guarantee held, just now" : "Guarantee broken, just now"}</p>
     </div>
-    <div className="rounded-[12px] bg-surface overflow-x-auto">
-      <table className="w-full text-[12.5px]">
-        <thead>
-          <tr className="text-[10.5px] font-medium uppercase tracking-[0.06em] text-ink-tertiary">
-            <th className="text-left px-2.5 sm:px-3.5 py-2 whitespace-nowrap">Item</th>
-            <th className="text-left px-2.5 sm:px-3.5 py-2 whitespace-nowrap">Advertised</th>
-            <th className="text-left px-2.5 sm:px-3.5 py-2 whitespace-nowrap">Simulated</th>
-            <th className="text-left px-2.5 sm:px-3.5 py-2 whitespace-nowrap">Status</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-divider">
-          {PREVIEW_ROWS.map((row) => (
-            <tr key={row.item}>
-              <td className="px-2.5 sm:px-3.5 py-2 font-mono text-ink whitespace-nowrap">{row.item}</td>
-              <td className="px-2.5 sm:px-3.5 py-2 text-ink-muted whitespace-nowrap">{row.advertised}</td>
-              <td className="px-2.5 sm:px-3.5 py-2 text-ink-muted whitespace-nowrap">{row.simulated}</td>
-              <td className="px-2.5 sm:px-3.5 py-2 whitespace-nowrap">
-                <Badge tone={row.status} solid>
-                  {row.status}
-                </Badge>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-);
+  );
+};
 
 export const LandingPage: React.FC = () => {
+  const [demoResult, setDemoResult] = useState<DemoAuditResult | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [demoError, setDemoError] = useState<string | null>(null);
+
+  const handleRunDemo = async () => {
+    setIsRunning(true);
+    setDemoError(null);
+    const startedAt = Date.now();
+    try {
+      const result = await runDemoAudit("global");
+      // A short, deliberate minimum duration so the progress bar reads as
+      // an actual audit rather than an instant flash -- the numbers shown
+      // afterward are the genuine response, not padded or invented.
+      const minDurationMs = 900;
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < minDurationMs) await new Promise((r) => setTimeout(r, minDurationMs - elapsed));
+      setDemoResult(result);
+    } catch (e) {
+      setDemoError(e instanceof Error ? e.message : "Couldn't reach the audit engine -- try again in a moment.");
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-bg overflow-x-hidden">
       <header className="sticky top-0 z-40 bg-material-thin backdrop-blur-[30px] backdrop-saturate-[180%] border-b border-line/70">
@@ -125,8 +159,8 @@ export const LandingPage: React.FC = () => {
             are what you say they are.
           </h1>
           <p className="mt-6 text-[17px] leading-relaxed text-ink-muted max-w-xl mx-auto">
-            Validate loot table configs and Monte Carlo simulate real drop rates against what you advertise to
-            players -- catch the compliance gap before a regulator does.
+            Monte Carlo simulate your real drop rates against what you advertise -- catch the compliance gap before a
+            regulator does.
           </p>
           <div className="mt-9 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link to="/signup" className="w-full sm:w-auto">
@@ -142,8 +176,9 @@ export const LandingPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="mt-16 flex justify-center px-4">
-          <ProductPreview />
+        <div className="mt-16 flex flex-col items-center px-4">
+          <LiveAuditPreview result={demoResult} isRunning={isRunning} onRun={handleRunDemo} />
+          {demoError && <p className="mt-3 text-[12.5px] text-danger">{demoError}</p>}
         </div>
       </section>
 
@@ -164,19 +199,20 @@ export const LandingPage: React.FC = () => {
           <p className="mt-2 text-[15px] text-ink-muted">Every run does all three -- nothing to configure.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {FEATURES.map(({ icon: Icon, title, body }) => (
-            <Card key={title} className="p-7">
+          {FEATURES.map(({ icon: Icon, title, body, liveKey }) => (
+            <Card key={title} className="p-7 flex flex-col">
               <div className="w-10 h-10 rounded-[10px] bg-accent-soft text-accent flex items-center justify-center mb-4">
                 <Icon className="w-5 h-5" />
               </div>
               <h3 className="text-[16px] font-semibold mb-2">{title}</h3>
               <p className="text-[13.5px] text-ink-muted leading-relaxed">{body}</p>
+              <LiveNote liveKey={liveKey} result={demoResult} isRunning={isRunning} />
             </Card>
           ))}
         </div>
       </section>
 
-      <section className="max-w-3xl mx-auto px-6 pb-24">
+      <section className="max-w-3xl mx-auto px-6 pb-8">
         <Card className="p-8 flex flex-col sm:flex-row items-start gap-5">
           <div className="w-11 h-11 rounded-[12px] bg-accent-soft text-accent flex items-center justify-center shrink-0">
             <Scale className="w-5 h-5" />
@@ -191,6 +227,8 @@ export const LandingPage: React.FC = () => {
           </div>
         </Card>
       </section>
+
+      <RegulatoryCoverage />
 
       <section className="border-t border-line/70">
         <div className="max-w-5xl mx-auto px-6 py-16 text-center">
@@ -211,17 +249,21 @@ export const LandingPage: React.FC = () => {
             <Boxes className="w-4 h-4" />
             TrueLoot
           </div>
-          <nav className="flex items-center gap-5 text-[13px] text-ink-muted">
-            <Link to="/pricing" className="hover:text-ink transition-colors">
+          <nav className="flex items-center gap-5 text-[13px]">
+            <Link to="/pricing" className="text-accent hover:underline">
               Pricing
             </Link>
-            <Link to="/login" className="hover:text-ink transition-colors">
+            <Link to="/login" className="text-accent hover:underline">
               Log in
             </Link>
-            <Link to="/signup" className="hover:text-ink transition-colors">
+            <Link to="/signup" className="text-accent hover:underline">
               Sign up
             </Link>
           </nav>
+        </div>
+        <div className="max-w-6xl mx-auto px-6 pb-8 text-[12px] text-ink-tertiary">
+          Built on 54 automated tests, including a bug-injection suite that plants real config errors and asserts the
+          auditor catches every one.
         </div>
       </footer>
     </div>
