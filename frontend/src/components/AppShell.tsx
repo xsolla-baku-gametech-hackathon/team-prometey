@@ -11,7 +11,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
   return (
     <div className="min-h-screen flex bg-bg">
-      <aside className="w-[240px] shrink-0 border-r border-line/70 bg-white/70 backdrop-blur-xl backdrop-saturate-150 flex flex-col p-4">
+      <aside className="w-[240px] shrink-0 border-r border-line/70 bg-material-thin backdrop-blur-[30px] backdrop-saturate-[180%] flex flex-col p-4">
         <div className="flex items-center gap-2.5 px-2 py-3 mb-4">
           <div className="w-8 h-8 rounded-lg bg-accent text-white flex items-center justify-center shrink-0">
             <Boxes className="w-4.5 h-4.5" />
