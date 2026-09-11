@@ -7,9 +7,9 @@ import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { AuditResults } from "../components/AuditResults";
 import { LootTableEditor } from "../components/LootTableEditor";
-import { deleteTable, fetchHistory, fetchPlans, fetchTable, runAudit, updateTable } from "../lib/api";
+import { deleteTable, fetchHistory, fetchPlans, fetchRegions, fetchTable, runAudit, updateTable } from "../lib/api";
 import { useAuth } from "../lib/auth";
-import type { AuditRunOut, LootTable, PlanLimits, TableDetail } from "../types";
+import type { AuditRunOut, LootTable, PlanLimits, RegionRule, TableDetail } from "../types";
 
 export const TableDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +23,9 @@ export const TableDetailPage: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [regions, setRegions] = useState<Record<string, RegionRule>>({});
+  const [region, setRegion] = useState("global");
+  const [isApplyingFix, setIsApplyingFix] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState("");
@@ -33,12 +36,13 @@ export const TableDetailPage: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     setIsLoading(true);
-    Promise.all([fetchTable(id), fetchPlans(), fetchHistory(id)])
-      .then(([t, plans, hist]) => {
+    Promise.all([fetchTable(id), fetchPlans(), fetchHistory(id), fetchRegions()])
+      .then(([t, plans, hist, regionList]) => {
         setDetail(t);
         if (user) setLimits(plans[user.plan]);
         setHistory(hist);
         if (hist.length > 0) setResult(hist[0]);
+        setRegions(regionList);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load table"))
       .finally(() => setIsLoading(false));
@@ -49,7 +53,7 @@ export const TableDetailPage: React.FC = () => {
     setIsRunning(true);
     setError(null);
     try {
-      const res = await runAudit(id);
+      const res = await runAudit(id, { region });
       setResult(res);
       const hist = await fetchHistory(id);
       setHistory(hist);
@@ -57,6 +61,28 @@ export const TableDetailPage: React.FC = () => {
       setError(e instanceof Error ? e.message : "Audit failed");
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const handleApplyFix = async (itemId: string, suggestedWeight: number) => {
+    if (!id || !detail) return;
+    setIsApplyingFix(true);
+    setError(null);
+    try {
+      const nextTable: LootTable = {
+        ...detail.table,
+        items: detail.table.items.map((it) => (it.id === itemId ? { ...it, weight: suggestedWeight } : it)),
+      };
+      const updated = await updateTable(id, detail.name, nextTable);
+      setDetail(updated);
+      const res = await runAudit(id, { region });
+      setResult(res);
+      const hist = await fetchHistory(id);
+      setHistory(hist);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to apply fix");
+    } finally {
+      setIsApplyingFix(false);
     }
   };
 
@@ -175,15 +201,44 @@ export const TableDetailPage: React.FC = () => {
         ) : (
           <>
             <Card className="p-6 mb-6">
-              <Button onClick={handleRunAudit} disabled={isRunning}>
-                <Zap className="w-4 h-4" /> {isRunning ? "Running audit..." : "Run Audit"}
-              </Button>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button onClick={handleRunAudit} disabled={isRunning}>
+                  <Zap className="w-4 h-4" /> {isRunning ? "Running audit..." : "Run Audit"}
+                </Button>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="region-select" className="text-[11px] font-medium text-ink-muted">
+                    Compliance region
+                  </label>
+                  <select
+                    id="region-select"
+                    value={region}
+                    onChange={(e) => setRegion(e.target.value)}
+                    disabled={isRunning}
+                    className="rounded-md border border-line bg-surface px-3 py-1.5 text-[13px] outline-none focus:border-accent"
+                  >
+                    {Object.values(regions).map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {regions[region] && (
+                <p className="text-[11.5px] text-ink-muted mt-3 max-w-2xl leading-relaxed">{regions[region].note}</p>
+              )}
               {error && <div className="mt-3 text-[13px] text-danger bg-danger-soft rounded-md px-3 py-2">{error}</div>}
             </Card>
 
             {result && (
               <Card className="p-6 mb-6">
-                <AuditResults result={result} table={detail.table} canExport={limits?.export ?? false} />
+                <AuditResults
+                  result={result}
+                  table={detail.table}
+                  canExport={limits?.export ?? false}
+                  onApplyFix={handleApplyFix}
+                  isApplyingFix={isApplyingFix}
+                />
                 {!limits?.export && (
                   <p className="text-[12px] text-ink-muted mt-4 pt-4 border-t border-line">
                     Report export is available on the Studio and Enterprise plans.
