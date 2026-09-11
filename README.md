@@ -141,6 +141,8 @@ export TRUELOOT_ADMIN_EMAILS="you@yourteam.com"            # optional, grants /a
 export TRUELOOT_DEMO_PASSWORD="a password for demo@example.com"  # optional, see "Demo account" below
 ```
 
+These four are backend-only. The frontend has one build-time variable, `VITE_API_BASE_URL`, needed only when it's deployed to a different host than the backend -- see Deploy below.
+
 ### Demo account
 
 To skip manually recreating the buggy/fixed tables before a demo, seed a
@@ -178,9 +180,9 @@ cd backend
 .venv/bin/python3 -m pytest tests/ -v
 ```
 
-51/51 should pass, across two files:
+54/54 should pass, across two files:
 - `test_auditor.py` (24 tests) — the bug-injection self-test suite, proving the validator, simulator, and compliance diff each catch what they claim to, plus the statistical engine (Wilson CI, z-test, Bonferroni-adjusted alpha, region packs, suggested-fix algebra, pity grace period), exercising `app.schema`/`validator`/`simulate`/`compliance`/`regions` directly.
-- `test_api.py` (27 tests) — drives the actual HTTP surface with FastAPI's `TestClient` against an isolated in-memory SQLite database per test: signup/login, password change, cross-user ownership isolation (user B gets a 404 touching user A's table, not their data), plan-gated limits (free tier's 1-table cap, pull-count cap, export gate, last-run-only history), the region API (listing, rejecting an unknown id, persisting the chosen one), suggested-fix data on a failing item, and the admin allowlist/plan-change flow (non-admins get 403, allowlisted emails get promoted on signup or login, plan changes actually persist).
+- `test_api.py` (30 tests) — drives the actual HTTP surface with FastAPI's `TestClient` against an isolated in-memory SQLite database per test: signup/login, password change, cross-user ownership isolation (user B gets a 404 touching user A's table, not their data), plan-gated limits (free tier's 1-table cap, pull-count cap, export gate, last-run-only history), the region API (listing, rejecting an unknown id, persisting the chosen one), the public demo endpoint (no auth required, rejects an unknown region, ignores a client-supplied pull count), suggested-fix data on a failing item, and the admin allowlist/plan-change flow (non-admins get 403, allowlisted emails get promoted on signup or login, plan changes actually persist).
 
 ## Build (frontend)
 
@@ -188,6 +190,78 @@ cd backend
 cd frontend
 npm run build
 ```
+
+## Deploy
+
+Two pieces to host: the FastAPI backend (a normal long-running process --
+not a serverless function, since it holds a SQLite connection) and the
+built frontend (static files). PROJECT.md's original plan was
+Vercel/Netlify for the frontend and Railway/Render/Fly.io for the
+backend; either that split or a single VM both work.
+
+**Before deploying anywhere but localhost**, set on the backend:
+
+```bash
+export LOOT_AUDITOR_JWT_SECRET="a long random value"   # required -- the code falls back to an insecure dev default otherwise
+export TRUELOOT_ADMIN_EMAILS="you@yourteam.com"          # optional, grants /admin to that email on next signup/login
+export TRUELOOT_DEMO_PASSWORD="something not demo-loot-2026"  # optional, only matters if you also run seed_demo.py in prod
+```
+
+### SQLite persistence -- read this before picking a host
+
+`loot_auditor.db` is a plain file next to wherever the backend process
+runs (path configurable via `LOOT_AUDITOR_DB_PATH`). That's fine on a
+host with a persistent disk (a VM, a Railway/Fly volume, Render's paid
+persistent-disk tier) -- it is **not** fine on anything with an ephemeral
+or read-only filesystem (Vercel/Netlify functions, most serverless
+platforms, and some free-tier container hosts that wipe local disk on
+every redeploy or restart). On those, every signup and saved table
+would vanish at the next deploy. If that's the target, either confirm
+the platform's persistent-volume option is actually mounted at
+`LOOT_AUDITOR_DB_PATH`, or point `db.py`'s SQLAlchemy engine at a
+hosted Postgres instead (a real migration, not a config flag -- out of
+scope for the hackathon build, called out here so it isn't a surprise
+during a live demo).
+
+### Option A -- split hosting (frontend and backend on different domains)
+
+1. **Backend** (Railway, Render, Fly.io, or similar): deploy the
+   `backend/` directory. Start command:
+   ```bash
+   uvicorn app.main:app --host 0.0.0.0 --port $PORT
+   ```
+   (most platforms inject `$PORT`; hardcode `--port 8000` if yours
+   doesn't). Set the env vars above. Note the public HTTPS URL the
+   platform gives you.
+2. **Frontend** (Vercel, Netlify, Cloudflare Pages): deploy `frontend/`
+   with build command `npm run build`, output directory `dist`, and
+   this env var set at build time:
+   ```bash
+   VITE_API_BASE_URL=https://your-backend-url.example.com
+   ```
+   Without it, the frontend assumes the backend shares its hostname on
+   port 8000, which is only true for local dev or a single-host setup
+   (Option B). See `frontend/.env.example`.
+3. CORS is already wide open (`allow_origins=["*"]` in `main.py`) since
+   auth is bearer-token, not cookie-based -- no extra CORS config needed
+   for the cross-domain split.
+
+### Option B -- single host (one VM, one Fly machine, etc.)
+
+Simpler, no `VITE_API_BASE_URL` needed: run the backend on port 8000 on
+that host, `npm run build` the frontend, and serve `frontend/dist/` from
+the same hostname (a reverse proxy like Caddy or Nginx, or any static
+file server) so the frontend's same-hostname-port-8000 default just
+works. Keep the backend process supervised (systemd, pm2, Fly's
+built-in process management) so it restarts if it crashes.
+
+### After deploying
+
+- Sign up through the real UI, or run `python -m app.seed_demo` against
+  the production database (with `TRUELOOT_DEMO_PASSWORD` set to
+  something real) to get the pre-audited buggy/fixed demo tables.
+- Add your email to `TRUELOOT_ADMIN_EMAILS` and log in once to unlock
+  `/admin`.
 
 ## Architecture
 
@@ -267,3 +341,4 @@ export TRUELOOT_ADMIN_EMAILS="you@example.com"
 - PDF export opens a print-formatted page and relies on the browser's own "Save as PDF" print destination rather than generating a PDF server-side — works everywhere without a new dependency, but isn't a one-click file.
 - No side-by-side diff between two different *tables* (only between two audit *runs* of the same table) — editing a table in place and re-running is the supported way to see whether a fix worked.
 - Realistic path to market is likely as a compliance module inside a larger live-ops/analytics platform rather than a standalone company at scale — still a legitimate standalone SaaS at small scale (indie/mid studios), which is the story worth telling to judges.
+- SQLite is a plain file, which breaks on hosts with an ephemeral or read-only filesystem (most serverless platforms) — fine for a VM or a host with a real persistent volume, not fine for e.g. a Vercel function. See the Deploy section.
