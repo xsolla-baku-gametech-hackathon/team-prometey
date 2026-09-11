@@ -91,6 +91,16 @@ export interface RegionRule {
   note: string;
 }
 
+// Result shape from the public, unauthenticated POST /demo/audit -- same
+// audit engine as AuditRunOut, minus the persistence fields (id, region,
+// created_at) since nothing is saved.
+export interface DemoAuditResult {
+  validation_issues: Issue[];
+  blocked: boolean;
+  simulation: SimulationResult | null;
+  compliance: ComplianceReport | null;
+}
+
 // AuditRunOut from the backend -- same shape as the old stateless
 // AuditResponse plus persistence fields (id, created_at).
 export interface AuditRunOut {
