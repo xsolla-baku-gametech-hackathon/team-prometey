@@ -8,6 +8,7 @@ import { SignupPage } from "./pages/SignupPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { NewTablePage } from "./pages/NewTablePage";
 import { TableDetailPage } from "./pages/TableDetailPage";
+import { TableHistoryPage } from "./pages/TableHistoryPage";
 import { PricingPage } from "./pages/PricingPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { AdminPage } from "./pages/AdminPage";
@@ -43,6 +44,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <TableDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tables/:id/history"
+            element={
+              <ProtectedRoute>
+                <TableHistoryPage />
               </ProtectedRoute>
             }
           />
