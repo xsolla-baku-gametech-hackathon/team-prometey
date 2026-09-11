@@ -68,6 +68,13 @@ export function fetchMe(): Promise<User> {
   return request("/user/me");
 }
 
+export function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  return request("/user/password", {
+    method: "PUT",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+}
+
 // ── Loot tables ──────────────────────────────────────────────────────────
 
 export function fetchTables(): Promise<TableSummary[]> {
