@@ -2,6 +2,7 @@ import type {
   AdminUser,
   AuditRunOut,
   AuthResponse,
+  DemoAuditResult,
   LootTable,
   Plan,
   PlanLimits,
@@ -57,6 +58,11 @@ export function fetchPlans(): Promise<Record<Plan, PlanLimits>> {
 
 export function fetchRegions(): Promise<Record<string, RegionRule>> {
   return request("/regions", {}, false);
+}
+
+/** Public, unauthenticated demo audit for the landing page's "Run Sample Audit" -- real validator + Monte Carlo engine, no login, nothing saved. */
+export function runDemoAudit(region: string = "global"): Promise<DemoAuditResult> {
+  return request("/demo/audit", { method: "POST", body: JSON.stringify({ region }) }, false);
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────
