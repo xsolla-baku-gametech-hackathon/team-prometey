@@ -169,9 +169,9 @@ cd backend
 .venv/bin/python3 -m pytest tests/ -v
 ```
 
-37/37 should pass, across two files:
+39/39 should pass, across two files:
 - `test_auditor.py` (17 tests) — the bug-injection self-test suite, proving the validator, simulator, and compliance diff each catch what they claim to, exercising `app.schema`/`validator`/`simulate`/`compliance` directly.
-- `test_api.py` (20 tests) — drives the actual HTTP surface with FastAPI's `TestClient` against an isolated in-memory SQLite database per test: signup/login, cross-user ownership isolation (user B gets a 404 touching user A's table, not their data), plan-gated limits (free tier's 1-table cap, pull-count cap, export gate, last-run-only history), and the admin allowlist/plan-change flow (non-admins get 403, allowlisted emails get promoted on signup or login, plan changes actually persist).
+- `test_api.py` (22 tests) — drives the actual HTTP surface with FastAPI's `TestClient` against an isolated in-memory SQLite database per test: signup/login, password change, cross-user ownership isolation (user B gets a 404 touching user A's table, not their data), plan-gated limits (free tier's 1-table cap, pull-count cap, export gate, last-run-only history), and the admin allowlist/plan-change flow (non-admins get 403, allowlisted emails get promoted on signup or login, plan changes actually persist).
 
 ## Build (frontend)
 
