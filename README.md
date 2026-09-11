@@ -50,13 +50,22 @@ If the table declares a `pity` rule, a second pass — necessarily a sequential 
 
 ### 3. Compliance diff (`compliance.py`)
 
-Each item's natural simulated rate is compared against its advertised rate, flagged green/yellow/red by how far it's drifted — but a *fixed* percentage-point tolerance isn't enough on its own. Monte Carlo sampling has real statistical noise: at 300,000 pulls, a 25%-frequency item has a sampling standard error of `sqrt(0.25 × 0.75 / 300,000) ≈ 0.079` percentage points, so 3 standard errors is `≈ 0.24pp` — more than double this project's default 0.1pp tolerance. Without accounting for that, a perfectly correct table would randomly flag yellow/red purely from sampling variance, on a different item every time you re-ran it. So the tolerance actually applied is whichever is larger:
+Each item's natural simulated rate is compared against its advertised rate using a one-sample proportion **z-test** (advertised rate as the null hypothesis), not a bare percentage-point cutoff. A fixed pp tolerance alone isn't enough: Monte Carlo sampling has real statistical noise, so a perfectly correct table would randomly flag yellow/red purely from sampling variance, on a different item every time you re-ran it. Two refinements make the test trustworthy at scale:
 
-```
-effective_tolerance = max(configured_tolerance, 3 × standard_error(advertised_rate, num_pulls))
-```
+- **Bonferroni correction** — testing N items each at a raw `alpha=0.05` inflates the whole table's false-positive rate to roughly `1-(1-0.05)^N` (≈18.5% for four items, not 5%). The per-item significance threshold actually used is `region.alpha / N`, keeping the table-wide false-positive rate near the region's stated `alpha`.
+- **A practical-tolerance floor** (`region.min_pp_floor`) — at large enough sample sizes (1M+ pulls), *any* nonzero deviation becomes statistically significant without being a real business problem. A deviation at or below the floor is never flagged red no matter its p-value.
 
-i.e. "only flag a deviation big enough to be statistically distinguishable from noise, never just smaller than the regulatory tolerance floor." Status per item: `green` if `|simulated − advertised| ≤ effective_tolerance`, `yellow` if within `2×`, `red` beyond that. Pity gets its own flag, independent of the rate diff: `red` if the target rarity was never obtained at all (naturally or via pity) across the whole run, `red` if the longest observed gap exceeded the promised `guaranteed_within_pulls`, otherwise `green`. The audit's `overall_status` is simply the worst status across every item flag plus the pity flag.
+Each item flag also reports a 95% **Wilson score confidence interval** (tighter and more defensible than a symmetric normal approximation for low-probability items like a 1% legendary rate), and — for any non-green item — a **suggested corrected weight**, solved algebraically from `advertised_rate = w' / (other_items_weight + w')`. The Table Detail page surfaces this as an "Apply Fix & Re-run" button that patches the weight and re-audits immediately.
+
+Pity gets its own flag, independent of the rate diff: `red` if the target rarity was never obtained at all (naturally or via pity) across the whole run, `red` if the longest observed gap exceeded the promised `guaranteed_within_pulls` (plus the region's `pity_grace_pulls`), otherwise `green`. The audit's `overall_status` is the worst status across every item flag plus the pity flag.
+
+#### Region packs (`regions.py`)
+
+`alpha`, `min_pp_floor`, and `pity_grace_pulls` are bundled per jurisdiction (Global default, Belgium, Netherlands, China, South Korea) and selectable per audit run via the Table Detail page's region dropdown or `POST /tables/{id}/audit`'s `region` field. **The specific numbers are illustrative defaults for tuning, not a citation to statute** — real loot-box law is about disclosure/classification, not a single numeric formula — but the statistical machinery behind them (the z-test, Bonferroni correction, and CI) is genuine, so picking a stricter region pack produces a genuinely different, defensible verdict on the same simulated data, not just a relabeled one.
+
+#### Drift analysis (frontend-only, `DriftAnalysis.tsx`)
+
+The Audit History page fits an ordinary-least-squares trend line to each item's advertised/simulated delta across a table's saved runs (Studio/Enterprise's full history only — needs 3+ runs), flagging an item "drifting toward breach" with a projected number of runs until it crosses its tolerance floor, even while the latest run still shows green. Pure client-side computation over data the history endpoint already returns — no new backend endpoint needed.
 
 ### 4. Frontend sync model
 
@@ -169,9 +178,9 @@ cd backend
 .venv/bin/python3 -m pytest tests/ -v
 ```
 
-39/39 should pass, across two files:
-- `test_auditor.py` (17 tests) — the bug-injection self-test suite, proving the validator, simulator, and compliance diff each catch what they claim to, exercising `app.schema`/`validator`/`simulate`/`compliance` directly.
-- `test_api.py` (22 tests) — drives the actual HTTP surface with FastAPI's `TestClient` against an isolated in-memory SQLite database per test: signup/login, password change, cross-user ownership isolation (user B gets a 404 touching user A's table, not their data), plan-gated limits (free tier's 1-table cap, pull-count cap, export gate, last-run-only history), and the admin allowlist/plan-change flow (non-admins get 403, allowlisted emails get promoted on signup or login, plan changes actually persist).
+51/51 should pass, across two files:
+- `test_auditor.py` (24 tests) — the bug-injection self-test suite, proving the validator, simulator, and compliance diff each catch what they claim to, plus the statistical engine (Wilson CI, z-test, Bonferroni-adjusted alpha, region packs, suggested-fix algebra, pity grace period), exercising `app.schema`/`validator`/`simulate`/`compliance`/`regions` directly.
+- `test_api.py` (27 tests) — drives the actual HTTP surface with FastAPI's `TestClient` against an isolated in-memory SQLite database per test: signup/login, password change, cross-user ownership isolation (user B gets a 404 touching user A's table, not their data), plan-gated limits (free tier's 1-table cap, pull-count cap, export gate, last-run-only history), the region API (listing, rejecting an unknown id, persisting the chosen one), suggested-fix data on a failing item, and the admin allowlist/plan-change flow (non-admins get 403, allowlisted emails get promoted on signup or login, plan changes actually persist).
 
 ## Build (frontend)
 
@@ -188,17 +197,19 @@ backend/
     schema.py       loot table data model (Pydantic) -- unchanged since the core-logic build
     validator.py      static config checks
     simulate.py         Monte Carlo pull simulator + pity logic
-    compliance.py         advertised-vs-simulated diff, red/yellow/green
-    db.py                    SQLite engine/session setup
+    compliance.py         advertised-vs-simulated diff (z-test, Bonferroni, Wilson CI, suggested fix)
+    regions.py              per-jurisdiction rule packs (alpha / min_pp_floor / pity_grace_pulls)
+    db.py                    SQLite engine/session setup + self-healing column backfill
     db_models.py               User / LootTableRecord / AuditRun (SQLAlchemy)
     auth.py                      bcrypt hashing + JWT issue/verify
     plans.py                       free/studio/enterprise limits
     main.py                          FastAPI app: auth, table CRUD, audit, history, admin
+    seed_demo.py                       seeds demo@example.com with pre-audited tables
   samples/              bundled demo loot tables (clean + buggy)
-  .env.example          documents LOOT_AUDITOR_JWT_SECRET / LOOT_AUDITOR_DB_PATH / TRUELOOT_ADMIN_EMAILS
+  .env.example          documents LOOT_AUDITOR_JWT_SECRET / LOOT_AUDITOR_DB_PATH / TRUELOOT_ADMIN_EMAILS / TRUELOOT_DEMO_PASSWORD
   tests/
-    test_auditor.py       bug-injection self-test suite (core logic only)
-    test_api.py              HTTP-layer tests: auth, ownership isolation, plan gating
+    test_auditor.py       bug-injection self-test suite + statistical engine (core logic only)
+    test_api.py              HTTP-layer tests: auth, ownership isolation, plan gating, regions
 
 frontend/
   src/
@@ -213,9 +224,10 @@ frontend/
       ProtectedRoute.tsx                    redirects to /login when logged out
       LootTableEditor.tsx                     GUI item/pity editor, synced with the raw JSON view
       CompareRuns.tsx                           side-by-side diff between two saved audit runs
+      DriftAnalysis.tsx                           OLS trend + projected-runs-to-breach per item
       AdminRoute.tsx                              like ProtectedRoute, plus an is_admin check
       AuditResults.tsx, RateChart.tsx, PityChart.tsx
-    pages/                                   one file per route (AdminPage.tsx included)
+    pages/                                   one file per route (AdminPage.tsx, TableHistoryPage.tsx included)
     App.tsx                                    React Router setup
 ```
 
@@ -248,7 +260,8 @@ export TRUELOOT_ADMIN_EMAILS="you@example.com"
 ## Known Weaknesses
 
 - No real payment processing — plan gating is enforced in-app but not billed; `/admin` is the manual lever a real upgrade pulls today.
-- Tolerance/compliance logic is a single configurable threshold, not region-specific (Belgium vs. China vs. Korea have different actual disclosure rules).
+- Region packs (Belgium/Netherlands/China/South Korea) give each jurisdiction its own statistical threshold and are a real, selectable input to the compliance engine now — but the specific `alpha`/`min_pp_floor` numbers per region are illustrative defaults for tuning, not a citation to each region's actual disclosure/gambling statute.
+- The suggested-fix solver only proposes adjusting the flagged item's own weight — it doesn't consider fixing the advertised rate instead, or redistributing weight across multiple items at once.
 - Auth is minimal (email/password only, no SSO) — fine for a hackathon demo, not enterprise-ready as-is.
 - Admin access is an env-configured email allowlist with no UI to grant/revoke it and no audit log of who changed which user's plan when — fine for a small internal team, not how you'd run this once the team doesn't fully trust each other.
 - PDF export opens a print-formatted page and relies on the browser's own "Save as PDF" print destination rather than generating a PDF server-side — works everywhere without a new dependency, but isn't a one-click file.
