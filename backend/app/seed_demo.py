@@ -19,7 +19,7 @@ import os
 from pathlib import Path
 
 from app.auth import hash_password
-from app.compliance import DEFAULT_TOLERANCE, compute_compliance
+from app.compliance import compute_compliance
 from app.db import SessionLocal, init_db
 from app.db_models import AuditRun, LootTableRecord, User
 from app.plans import limits_for
@@ -61,7 +61,7 @@ def _upsert_table(db, user: User, name: str, table: LootTable) -> LootTableRecor
     return record
 
 
-def _run_and_save_audit(db, record: LootTableRecord, user: User) -> None:
+def _run_and_save_audit(db, record: LootTableRecord, user: User, seed: int = DEMO_SEED) -> None:
     table = LootTable.model_validate_json(record.config_json)
     limits = limits_for(user.plan)
 
@@ -72,8 +72,8 @@ def _run_and_save_audit(db, record: LootTableRecord, user: User) -> None:
     report = None
     overall_status = "red" if blocked else "green"
     if not blocked:
-        sim = simulate(table, num_pulls=limits.max_pulls, seed=DEMO_SEED)
-        report = compute_compliance(table, sim, tolerance=DEFAULT_TOLERANCE)
+        sim = simulate(table, num_pulls=limits.max_pulls, seed=seed)
+        report = compute_compliance(table, sim, region="global")
         overall_status = report.overall_status
 
     run = AuditRun(
@@ -107,12 +107,18 @@ def seed() -> None:
         buggy = _upsert_table(db, user, "Starter Chest -- Buggy", _load_sample("starter_chest_buggy"))
         _run_and_save_audit(db, buggy, user)
 
+        # Several runs (not just one) so the Drift Analysis panel on this
+        # table's history page has real data the moment someone logs in,
+        # instead of needing a live "click Run Audit three times" detour
+        # during a demo. Different seeds give genuine Monte Carlo variation
+        # run-to-run, same as a real user re-auditing the same table.
         fixed = _upsert_table(db, user, "Starter Chest -- Fixed", _load_sample("starter_chest_clean"))
-        _run_and_save_audit(db, fixed, user)
+        for seed in (40, 41, 42, 43):
+            _run_and_save_audit(db, fixed, user, seed=seed)
 
         print(f"Seeded demo account: {DEMO_EMAIL} / (password from TRUELOOT_DEMO_PASSWORD, default set)")
         print("  - Starter Chest -- Buggy: audited, expect FAIL")
-        print("  - Starter Chest -- Fixed: audited, expect PASS")
+        print("  - Starter Chest -- Fixed: audited 4x, expect PASS with drift-analysis data")
     finally:
         db.close()
 
