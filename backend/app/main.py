@@ -21,6 +21,7 @@ TrueLoot API -- multi-user SaaS shape (PROJECT.md section 8).
 
     GET /samples                          bundled demo tables, for "start from a template"
     GET /plans                            plan tiers + limits, for the pricing page
+    GET /regions                          compliance rule packs, for the audit region selector
     GET /health                           liveness check
 
 Every /tables, /admin, and /auth-adjacent route (other than signup/login)
@@ -50,10 +51,11 @@ from app.auth import (
     sync_admin_flag,
     verify_password,
 )
-from app.compliance import DEFAULT_TOLERANCE, ComplianceReport, compute_compliance
+from app.compliance import ComplianceReport, compute_compliance
 from app.db import get_session, init_db
 from app.db_models import AuditRun, LootTableRecord, User
 from app.plans import PLAN_LIMITS, limits_for
+from app.regions import DEFAULT_REGION, REGIONS, region_for
 from app.schema import LootTable
 from app.simulate import SimulationResult, simulate
 from app.validator import Issue, has_blocking_errors, validate_table
@@ -86,6 +88,11 @@ def health():
 @app.get("/plans")
 def get_plans() -> dict[str, dict]:
     return {name: limits.model_dump() for name, limits in PLAN_LIMITS.items()}
+
+
+@app.get("/regions")
+def get_regions() -> dict[str, dict]:
+    return {region_id: rule.model_dump() for region_id, rule in REGIONS.items()}
 
 
 @app.get("/samples")
@@ -302,8 +309,11 @@ def delete_table(
 
 class AuditRequestBody(BaseModel):
     num_pulls: int | None = None
-    tolerance: float = DEFAULT_TOLERANCE
+    # None means "use the chosen region's own practical-tolerance floor" --
+    # only set this to override that floor manually.
+    tolerance: float | None = None
     seed: int | None = None
+    region: str | None = None  # region pack id (app.regions.REGIONS); defaults to "global"
 
 
 class AuditRunOut(BaseModel):
@@ -313,6 +323,7 @@ class AuditRunOut(BaseModel):
     simulation: SimulationResult | None = None
     compliance: ComplianceReport | None = None
     created_at: str
+    region: str
 
 
 def _run_and_persist(record: LootTableRecord, body: AuditRequestBody, current_user: User, db: Session) -> AuditRunOut:
@@ -320,6 +331,10 @@ def _run_and_persist(record: LootTableRecord, body: AuditRequestBody, current_us
     limits = limits_for(current_user.plan)
     requested = body.num_pulls or limits.max_pulls
     num_pulls = min(requested, limits.max_pulls)
+
+    region_id = body.region or DEFAULT_REGION
+    if region_id not in REGIONS:
+        raise HTTPException(422, f"Unknown region '{region_id}'. Must be one of: {', '.join(REGIONS)}.")
 
     issues = validate_table(table)
     blocked = has_blocking_errors(issues)
@@ -333,7 +348,7 @@ def _run_and_persist(record: LootTableRecord, body: AuditRequestBody, current_us
             sim = simulate(table, num_pulls=num_pulls, seed=body.seed)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
-        report = compute_compliance(table, sim, tolerance=body.tolerance)
+        report = compute_compliance(table, sim, region=region_for(region_id), tolerance=body.tolerance)
         overall_status = report.overall_status
 
     run = AuditRun(
@@ -345,6 +360,7 @@ def _run_and_persist(record: LootTableRecord, body: AuditRequestBody, current_us
         pull_count=num_pulls,
         overall_status=overall_status,
         blocked=blocked,
+        region=region_id,
     )
     db.add(run)
 
@@ -364,6 +380,7 @@ def _run_and_persist(record: LootTableRecord, body: AuditRequestBody, current_us
         simulation=sim,
         compliance=report,
         created_at=run.created_at.isoformat(),
+        region=run.region,
     )
 
 
@@ -400,6 +417,7 @@ def get_history(
                 else None
             ),
             created_at=run.created_at.isoformat(),
+            region=run.region,
         )
         for run in runs
     ]
