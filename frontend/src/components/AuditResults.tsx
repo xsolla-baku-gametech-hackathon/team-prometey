@@ -1,5 +1,5 @@
 import React from "react";
-import { Download, Printer } from "lucide-react";
+import { Download, Printer, Wrench } from "lucide-react";
 import type { AuditRunOut, LootTable } from "../types";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
@@ -10,12 +10,20 @@ import { downloadComplianceReportCsv, openPrintableComplianceReport } from "../l
 const STATUS_TONE: Record<string, "green" | "yellow" | "red"> = { green: "green", yellow: "yellow", red: "red" };
 const STATUS_LABEL: Record<string, string> = { green: "Compliant", yellow: "Borderline", red: "Non-Compliant" };
 
-export const AuditResults: React.FC<{ result: AuditRunOut; table: LootTable; canExport: boolean }> = ({
-  result,
-  table,
-  canExport,
-}) => {
+function formatPValue(p: number): string {
+  if (p < 0.001) return "< 0.001";
+  return p.toFixed(3);
+}
+
+export const AuditResults: React.FC<{
+  result: AuditRunOut;
+  table: LootTable;
+  canExport: boolean;
+  onApplyFix?: (itemId: string, suggestedWeight: number) => void;
+  isApplyingFix?: boolean;
+}> = ({ result, table, canExport, onApplyFix, isApplyingFix = false }) => {
   const { validation_issues, blocked, simulation, compliance } = result;
+  const fixableFlags = compliance?.item_flags.filter((f) => f.suggested_weight !== null) ?? [];
 
   return (
     <div className="flex flex-col gap-7">
@@ -79,16 +87,23 @@ export const AuditResults: React.FC<{ result: AuditRunOut; table: LootTable; can
       {compliance && simulation && (
         <>
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted mb-2.5">Item Compliance</div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-              <div className="border border-line rounded-lg overflow-hidden">
+            <div className="flex items-baseline justify-between mb-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-muted">Item Compliance</div>
+              <div className="text-[11px] text-ink-muted">
+                {compliance.region_id} region &middot; &alpha;={compliance.alpha.toExponential(2)} (Bonferroni-adjusted)
+              </div>
+            </div>
+            <div className="flex flex-col gap-5">
+              <div className="border border-line rounded-lg overflow-x-auto">
                 <table className="w-full text-[13px] tabular-nums">
                   <thead>
                     <tr className="bg-bg text-[11px] font-medium uppercase tracking-[0.08em] text-ink-muted">
                       <th className="text-left px-3.5 py-2.5">Item</th>
                       <th className="text-left px-3.5 py-2.5">Advertised</th>
                       <th className="text-left px-3.5 py-2.5">Simulated</th>
+                      <th className="text-left px-3.5 py-2.5">95% CI</th>
                       <th className="text-left px-3.5 py-2.5">Delta</th>
+                      <th className="text-left px-3.5 py-2.5">p-value</th>
                       <th className="text-left px-3.5 py-2.5">Status</th>
                     </tr>
                   </thead>
@@ -98,10 +113,14 @@ export const AuditResults: React.FC<{ result: AuditRunOut; table: LootTable; can
                         <td className="px-3.5 py-2.5 font-medium">{f.item_id}</td>
                         <td className="px-3.5 py-2.5 text-ink-muted">{(f.advertised_rate * 100).toFixed(2)}%</td>
                         <td className="px-3.5 py-2.5 text-ink-muted">{(f.simulated_rate * 100).toFixed(2)}%</td>
+                        <td className="px-3.5 py-2.5 text-ink-muted whitespace-nowrap">
+                          [{(f.ci_low * 100).toFixed(2)}%, {(f.ci_high * 100).toFixed(2)}%]
+                        </td>
                         <td className={`px-3.5 py-2.5 ${f.delta > 0 ? "text-success" : f.delta < 0 ? "text-danger" : "text-ink-muted"}`}>
                           {f.delta >= 0 ? "+" : ""}
                           {(f.delta * 100).toFixed(3)} pp
                         </td>
+                        <td className="px-3.5 py-2.5 text-ink-muted font-mono text-[12px]">{formatPValue(f.p_value)}</td>
                         <td className="px-3.5 py-2.5">
                           <Badge tone={STATUS_TONE[f.status]} solid>
                             {f.status}
@@ -115,6 +134,43 @@ export const AuditResults: React.FC<{ result: AuditRunOut; table: LootTable; can
               <RateChart flags={compliance.item_flags} />
             </div>
           </div>
+
+          {fixableFlags.length > 0 && (
+            <div className="border border-accent/25 bg-accent-soft rounded-lg p-4">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-accent mb-3">
+                <Wrench className="w-3.5 h-3.5" /> Suggested Fixes
+              </div>
+              <div className="flex flex-col gap-2">
+                {fixableFlags.map((f) => {
+                  const currentWeight = table.items.find((it) => it.id === f.item_id)?.weight;
+                  return (
+                    <div
+                      key={f.item_id}
+                      className="flex flex-wrap items-center justify-between gap-3 bg-surface border border-line rounded-md px-3.5 py-2.5"
+                    >
+                      <p className="text-[13px] text-ink">
+                        <span className="font-medium">{f.item_id}</span>{" "}
+                        <span className="text-ink-muted">
+                          -- weight {currentWeight ?? "?"} &rarr; <b className="text-ink">{f.suggested_weight}</b> would
+                          hit the advertised {(f.advertised_rate * 100).toFixed(2)}% rate exactly.
+                        </span>
+                      </p>
+                      {onApplyFix && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => onApplyFix(f.item_id, f.suggested_weight as number)}
+                          disabled={isApplyingFix}
+                          className="!py-1.5 !text-[12.5px] shrink-0"
+                        >
+                          {isApplyingFix ? "Applying..." : "Apply Fix & Re-run"}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {compliance.pity_flag && (
             <div>
