@@ -1,22 +1,28 @@
 @import "tailwindcss";
 
 /*
-  Apple-style design tokens (see PROJECT.md section 9): neutral base,
-  one confident accent, generous radius/shadow scale. Red/yellow/green
-  are reserved strictly for compliance flags, never used for general UI.
-  Accent/success/danger pinned to Apple's actual system colors (system
-  blue/green/red) per the more recent, pixel-specific design pass.
+  Apple "Glass / Soft-Futurism" design tokens: SF Pro everywhere, one
+  system tint (blue) as the accent, vibrancy materials over solid fills
+  on overlay/nav surfaces, no hard borders on cards -- radius + a subtle
+  shadow carries elevation instead. Red/yellow/green stay reserved
+  strictly for compliance flags, never general UI.
+
+  --color-ink-muted/-tertiary are translucent (rgba over the current
+  background) rather than flat greys, per the reference's vibrancy-first
+  text-color approach -- they read correctly on both --color-bg and
+  --color-surface without a second set of tokens.
 */
 @theme {
-  --color-bg: #f5f5f7;
+  --color-bg: #f2f2f7;
   --color-surface: #ffffff;
   --color-ink: #1d1d1f;
-  --color-ink-muted: #6e6e73;
+  --color-ink-muted: rgba(60, 60, 67, 0.78);
+  --color-ink-tertiary: rgba(60, 60, 67, 0.55);
   --color-accent: #007aff;
   --color-accent-hover: #0071e3;
   --color-accent-soft: #e8f2fd;
-  --color-line: #d2d2d7;
-  --color-divider: #e5e5ea;
+  --color-line: rgba(60, 60, 67, 0.18);
+  --color-divider: rgba(60, 60, 67, 0.18);
 
   --color-success: #34c759;
   --color-success-soft: #e9f9ee;
@@ -25,11 +31,20 @@
   --color-danger: #ff3b30;
   --color-danger-soft: #ffece9;
 
-  --radius-xl: 20px;
-  --radius-lg: 16px;
-  --radius-md: 12px;
+  /* Vibrancy materials -- alpha-over-blur, used on nav/sidebar/sheet
+     surfaces only. Cards use a solid --color-surface fill instead (see
+     Card.tsx) -- materials over a material double up and look muddy. */
+  --color-material-thin: rgb(255 255 255 / 0.6);
+  --color-material-regular: rgb(255 255 255 / 0.78);
+  --color-material-thick: rgb(255 255 255 / 0.92);
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+  /* Two-step radius system: 12 for interactive controls (buttons,
+     inputs), 14 for elevated surfaces (cards, sheets). */
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 14px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
 }
 
@@ -43,6 +58,10 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  /* SF Pro is a variable font with built-in optical sizing (Text below
+     20px, Display at/above it) -- this is the default, stated explicitly
+     so a later change doesn't disable it by accident. */
+  font-optical-sizing: auto;
 }
 
 #root {
