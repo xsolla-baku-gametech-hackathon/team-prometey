@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Boxes } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { Button } from "../components/ui/Button";
@@ -31,11 +30,8 @@ export const LoginPage: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg px-4">
       <div className="w-full max-w-[380px]">
-        <div className="flex items-center gap-2.5 justify-center mb-8">
-          <div className="w-9 h-9 rounded-lg bg-accent text-white flex items-center justify-center">
-            <Boxes className="w-5 h-5" />
-          </div>
-          <span className="text-[17px] font-semibold tracking-tight">TrueLoot</span>
+        <div className="flex items-center justify-center mb-8">
+          <img src="/logo.png" alt="TrueLoot" className="h-9 w-auto" />
         </div>
 
         <Card className="p-8">

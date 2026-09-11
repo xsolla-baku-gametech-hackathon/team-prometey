@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { Boxes, ShieldCheck, LineChart, Timer, Scale, ArrowRight } from "lucide-react";
+import { ShieldCheck, LineChart, Timer, Scale, ArrowRight } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { StatusDot } from "../components/ui/Badge";
@@ -116,12 +116,7 @@ export const LandingPage: React.FC = () => {
     <div className="min-h-screen bg-bg overflow-x-hidden">
       <header className="sticky top-0 z-40 bg-material-thin backdrop-blur-[30px] backdrop-saturate-[180%] border-b border-line/70">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-[10px] bg-accent text-white flex items-center justify-center">
-              <Boxes className="w-4.5 h-4.5" />
-            </div>
-            <span className="text-[15px] font-semibold tracking-tight">TrueLoot</span>
-          </div>
+          <img src="/logo.png" alt="TrueLoot" className="h-6 w-auto" />
           <nav className="flex items-center gap-1">
             <Link
               to="/pricing"
@@ -245,10 +240,7 @@ export const LandingPage: React.FC = () => {
 
       <footer className="border-t border-line/70">
         <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-[13px] text-ink-muted">
-            <Boxes className="w-4 h-4" />
-            TrueLoot
-          </div>
+          <img src="/logo.png" alt="TrueLoot" className="h-5 w-auto opacity-70" />
           <nav className="flex items-center gap-5 text-[13px]">
             <Link to="/pricing" className="text-accent hover:underline">
               Pricing

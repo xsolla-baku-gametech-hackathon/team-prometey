@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Check, Boxes } from "lucide-react";
+import { Check } from "lucide-react";
 import { AppShell } from "../components/AppShell";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -104,11 +104,8 @@ export const PricingPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-bg">
       <header className="max-w-6xl mx-auto flex items-center justify-between px-6 py-6">
-        <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => navigate("/")}>
-          <div className="w-8 h-8 rounded-lg bg-accent text-white flex items-center justify-center">
-            <Boxes className="w-4.5 h-4.5" />
-          </div>
-          <span className="text-[15px] font-semibold tracking-tight">TrueLoot</span>
+        <div className="cursor-pointer" onClick={() => navigate("/")}>
+          <img src="/logo.png" alt="TrueLoot" className="h-6 w-auto" />
         </div>
         <nav className="flex items-center gap-3">
           <Link to="/login" className="text-[14px] text-ink-muted hover:text-ink px-3 py-2">

@@ -1,5 +1,5 @@
 import React from "react";
-import { LayoutGrid, CreditCard, Settings as SettingsIcon, LogOut, Boxes, ShieldCheck } from "lucide-react";
+import { LayoutGrid, CreditCard, Settings as SettingsIcon, LogOut, ShieldCheck } from "lucide-react";
 import { NavItem } from "./ui/NavItem";
 import { useAuth } from "../lib/auth";
 import { useNavigate } from "react-router-dom";
@@ -12,11 +12,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   return (
     <div className="min-h-screen flex bg-bg">
       <aside className="w-[240px] shrink-0 border-r border-line/70 bg-material-thin backdrop-blur-[30px] backdrop-saturate-[180%] flex flex-col p-4">
-        <div className="flex items-center gap-2.5 px-2 py-3 mb-4">
-          <div className="w-8 h-8 rounded-lg bg-accent text-white flex items-center justify-center shrink-0">
-            <Boxes className="w-4.5 h-4.5" />
-          </div>
-          <span className="text-[15px] font-semibold tracking-tight">TrueLoot</span>
+        <div className="flex items-center px-2 py-3 mb-4">
+          <img src="/logo.png" alt="TrueLoot" className="h-6 w-auto" />
         </div>
 
         <nav className="flex flex-col gap-1">
