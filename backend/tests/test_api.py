@@ -39,6 +39,28 @@ STARTER_TABLE = {
     "pity": {"target_rarity": "legendary", "guaranteed_within_pulls": 90, "reset_on_trigger": True},
 }
 
+DIVERGING_RATE_TABLE = {
+    # Same as STARTER_TABLE, but legendary_sword's weight is bumped from 10
+    # to 14 without updating advertised_rates to match -- true rate becomes
+    # ~1.4% against an advertised 1%, planted so /audit's suggested_weight
+    # has something real to fix.
+    "table_id": "diverging_chest",
+    "advertised_rates": {
+        "legendary_sword": 0.01,
+        "epic_sword": 0.05,
+        "rare_sword": 0.25,
+        "common_sword": 0.69,
+    },
+    "items": [
+        {"id": "common_sword", "rarity": "common", "weight": 690},
+        {"id": "rare_sword", "rarity": "rare", "weight": 250},
+        {"id": "epic_sword", "rarity": "epic", "weight": 50},
+        {"id": "legendary_sword", "rarity": "legendary", "weight": 14},
+    ],
+    "pity": None,
+}
+
+
 BROKEN_TABLE = {
     # Duplicate id -- a blocking validation error, so /audit should refuse
     # to run the simulation and report why instead.
@@ -274,6 +296,68 @@ def test_export_is_gated_off_the_free_plan(client: TestClient):
     assert plans["free"]["export"] is False
     assert plans["studio"]["export"] is True
     assert plans["enterprise"]["export"] is True
+
+
+# ── Compliance regions ───────────────────────────────────────────────────
+
+
+def test_regions_endpoint_lists_the_bundled_packs(client: TestClient):
+    res = client.get("/regions")
+    assert res.status_code == 200
+    regions = res.json()
+    assert set(regions) == {"global", "belgium", "netherlands", "china", "south_korea"}
+    assert regions["belgium"]["min_pp_floor"] < regions["global"]["min_pp_floor"]
+
+
+def test_audit_rejects_unknown_region(client: TestClient):
+    token = signup(client)["access_token"]
+    table_id = client.post(
+        "/tables", json={"name": "One", "table": STARTER_TABLE}, headers=auth_headers(token)
+    ).json()["id"]
+
+    res = client.post(f"/tables/{table_id}/audit", json={"region": "atlantis"}, headers=auth_headers(token))
+    assert res.status_code == 422
+
+
+def test_audit_persists_and_returns_the_chosen_region(client: TestClient):
+    token = signup(client)["access_token"]
+    table_id = client.post(
+        "/tables", json={"name": "One", "table": STARTER_TABLE}, headers=auth_headers(token)
+    ).json()["id"]
+
+    res = client.post(f"/tables/{table_id}/audit", json={"region": "belgium", "seed": 1}, headers=auth_headers(token))
+    assert res.status_code == 200
+    assert res.json()["region"] == "belgium"
+    assert res.json()["compliance"]["region_id"] == "belgium"
+
+    history = client.get(f"/tables/{table_id}/history", headers=auth_headers(token)).json()
+    assert history[0]["region"] == "belgium"
+
+
+def test_audit_defaults_to_global_region(client: TestClient):
+    token = signup(client)["access_token"]
+    table_id = client.post(
+        "/tables", json={"name": "One", "table": STARTER_TABLE}, headers=auth_headers(token)
+    ).json()["id"]
+
+    res = client.post(f"/tables/{table_id}/audit", json={"seed": 1}, headers=auth_headers(token))
+    assert res.status_code == 200
+    assert res.json()["region"] == "global"
+
+
+def test_failing_item_includes_a_suggested_weight(client: TestClient):
+    token = signup(client)["access_token"]
+    table_id = client.post(
+        "/tables", json={"name": "Buggy", "table": DIVERGING_RATE_TABLE}, headers=auth_headers(token)
+    ).json()["id"]
+
+    res = client.post(f"/tables/{table_id}/audit", json={"num_pulls": 300_000, "seed": 99}, headers=auth_headers(token))
+    assert res.status_code == 200
+    flags = {f["item_id"]: f for f in res.json()["compliance"]["item_flags"]}
+    assert flags["legendary_sword"]["status"] == "red"
+    assert flags["legendary_sword"]["suggested_weight"] is not None
+    assert flags["rare_sword"]["status"] == "green"
+    assert flags["rare_sword"]["suggested_weight"] is None
 
 
 # ── Admin ────────────────────────────────────────────────────────────────
