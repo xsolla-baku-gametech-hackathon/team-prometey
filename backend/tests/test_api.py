@@ -120,6 +120,31 @@ def test_protected_route_requires_bearer_token(client: TestClient):
     assert client.get("/tables").status_code in (401, 403)
 
 
+def test_change_password_updates_login(client: TestClient):
+    body = signup(client)
+    token = body["access_token"]
+    res = client.put(
+        "/user/password",
+        json={"current_password": "testpass123", "new_password": "newpassword456"},
+        headers=auth_headers(token),
+    )
+    assert res.status_code == 200
+
+    assert client.post("/auth/login", json={"email": "user@example.com", "password": "testpass123"}).status_code == 401
+    assert client.post("/auth/login", json={"email": "user@example.com", "password": "newpassword456"}).status_code == 200
+
+
+def test_change_password_rejects_wrong_current_password(client: TestClient):
+    body = signup(client)
+    token = body["access_token"]
+    res = client.put(
+        "/user/password",
+        json={"current_password": "wrongpassword", "new_password": "newpassword456"},
+        headers=auth_headers(token),
+    )
+    assert res.status_code == 401
+
+
 def test_protected_route_rejects_garbage_token(client: TestClient):
     res = client.get("/tables", headers=auth_headers("not-a-real-jwt"))
     assert res.status_code == 401
