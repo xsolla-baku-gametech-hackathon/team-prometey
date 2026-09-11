@@ -6,6 +6,7 @@ import { Card } from "../components/ui/Card";
 import { Badge } from "../components/ui/Badge";
 import { AuditResults } from "../components/AuditResults";
 import { CompareRuns } from "../components/CompareRuns";
+import { DriftAnalysis } from "../components/DriftAnalysis";
 import { fetchHistory, fetchPlans, fetchTable } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import type { AuditRunOut, PlanLimits, TableDetail } from "../types";
@@ -105,6 +106,8 @@ export const TableHistoryPage: React.FC = () => {
             <CompareRuns runs={history} />
           </div>
         )}
+
+        {limits?.full_history && <DriftAnalysis history={history} />}
 
         {history.length === 0 ? (
           <Card className="p-10 text-center text-[13.5px] text-ink-muted">
