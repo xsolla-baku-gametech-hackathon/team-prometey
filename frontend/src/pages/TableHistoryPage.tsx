@@ -90,7 +90,7 @@ export const TableHistoryPage: React.FC = () => {
         </p>
 
         {!limits?.full_history && (
-          <Card className="p-4 mb-6 bg-accent-soft border-accent/20">
+          <Card className="p-4 mb-6 bg-accent-soft">
             <p className="text-[13.5px] text-ink">
               Your {user?.plan} plan keeps the latest run only.{" "}
               <Link to="/pricing" className="text-accent font-medium hover:underline">
