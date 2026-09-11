@@ -24,6 +24,7 @@ export function downloadComplianceReportCsv(table: LootTable, result: AuditRunOu
   rows.push(["Table", table.table_id]);
   rows.push(["Audit run", result.id]);
   rows.push(["Generated", result.created_at]);
+  rows.push(["Region", result.region]);
   rows.push(["Blocked", result.blocked ? "yes" : "no"]);
   rows.push(["Overall status", result.compliance?.overall_status ?? ""]);
   rows.push([]);
@@ -39,16 +40,21 @@ export function downloadComplianceReportCsv(table: LootTable, result: AuditRunOu
 
   if (result.compliance && result.simulation) {
     rows.push(["Simulated pulls", result.simulation.num_pulls]);
+    rows.push(["Significance threshold (Bonferroni-adjusted alpha)", result.compliance.alpha]);
     rows.push([]);
     rows.push(["Item Compliance"]);
-    rows.push(["Item", "Advertised Rate", "Simulated Rate", "Delta (pp)", "Status"]);
+    rows.push(["Item", "Advertised Rate", "Simulated Rate", "95% CI Low", "95% CI High", "Delta (pp)", "p-value", "Status", "Suggested Weight"]);
     for (const f of result.compliance.item_flags) {
       rows.push([
         f.item_id,
         (f.advertised_rate * 100).toFixed(4) + "%",
         (f.simulated_rate * 100).toFixed(4) + "%",
+        (f.ci_low * 100).toFixed(4) + "%",
+        (f.ci_high * 100).toFixed(4) + "%",
         (f.delta * 100).toFixed(4),
+        f.p_value,
         f.status,
+        f.suggested_weight ?? "",
       ]);
     }
     if (result.compliance.pity_flag) {
@@ -76,7 +82,7 @@ export function openPrintableComplianceReport(table: LootTable, result: AuditRun
   const itemRows = (result.compliance?.item_flags ?? [])
     .map(
       (f) =>
-        `<tr><td>${esc(f.item_id)}</td><td>${(f.advertised_rate * 100).toFixed(2)}%</td><td>${(f.simulated_rate * 100).toFixed(2)}%</td><td>${f.delta >= 0 ? "+" : ""}${(f.delta * 100).toFixed(3)} pp</td><td class="status-${f.status}">${f.status}</td></tr>`
+        `<tr><td>${esc(f.item_id)}</td><td>${(f.advertised_rate * 100).toFixed(2)}%</td><td>${(f.simulated_rate * 100).toFixed(2)}%</td><td>[${(f.ci_low * 100).toFixed(2)}%, ${(f.ci_high * 100).toFixed(2)}%]</td><td>${f.delta >= 0 ? "+" : ""}${(f.delta * 100).toFixed(3)} pp</td><td>${f.p_value < 0.001 ? "&lt; 0.001" : f.p_value.toFixed(3)}</td><td class="status-${f.status}">${f.status}</td></tr>`
     )
     .join("");
 
@@ -105,6 +111,7 @@ export function openPrintableComplianceReport(table: LootTable, result: AuditRun
   <h1>Loot Table Compliance Report</h1>
   <div class="meta">
     Table: <code>${esc(table.table_id)}</code> &middot; Run: <code>${esc(result.id)}</code> &middot;
+    Region: <code>${esc(result.region)}</code> &middot;
     Generated: ${esc(new Date(result.created_at).toLocaleString())}
   </div>
 
@@ -125,8 +132,8 @@ export function openPrintableComplianceReport(table: LootTable, result: AuditRun
 
   ${
     result.compliance && result.simulation
-      ? `<h2>Item Compliance -- ${result.simulation.num_pulls.toLocaleString()} pulls simulated</h2>
-  <table><thead><tr><th>Item</th><th>Advertised</th><th>Simulated</th><th>Delta</th><th>Status</th></tr></thead><tbody>${itemRows}</tbody></table>`
+      ? `<h2>Item Compliance -- ${result.simulation.num_pulls.toLocaleString()} pulls simulated (&alpha;=${result.compliance.alpha.toExponential(2)}, Bonferroni-adjusted)</h2>
+  <table><thead><tr><th>Item</th><th>Advertised</th><th>Simulated</th><th>95% CI</th><th>Delta</th><th>p-value</th><th>Status</th></tr></thead><tbody>${itemRows}</tbody></table>`
       : ""
   }
 
@@ -144,4 +151,14 @@ export function openPrintableComplianceReport(table: LootTable, result: AuditRun
   if (!win) return;
   win.document.write(html);
   win.document.close();
+}
+
+/** Raw machine-readable report -- the full audit run plus the table it was run against, for anyone downstream (a regulator, a second tool, a CI pipeline) who wants the underlying numbers rather than a formatted view. */
+export function downloadComplianceReportJson(table: LootTable, result: AuditRunOut) {
+  const payload = {
+    table,
+    audit_run: result,
+    exported_at: new Date().toISOString(),
+  };
+  triggerDownload(JSON.stringify(payload, null, 2), "application/json", `${table.table_id || "loot-table"}-compliance-report.json`);
 }
