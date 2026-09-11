@@ -97,6 +97,16 @@ export interface User {
   id: string;
   email: string;
   plan: Plan;
+  is_admin: boolean;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  plan: Plan;
+  is_admin: boolean;
+  created_at: string;
+  table_count: number;
 }
 
 export interface AuthResponse {

@@ -1,4 +1,5 @@
 import type {
+  AdminUser,
   AuditRunOut,
   AuthResponse,
   LootTable,
@@ -100,4 +101,14 @@ export function runAudit(
 
 export function fetchHistory(tableId: string): Promise<AuditRunOut[]> {
   return request(`/tables/${tableId}/history`);
+}
+
+// ── Admin ────────────────────────────────────────────────────────────────
+
+export function fetchAdminUsers(): Promise<AdminUser[]> {
+  return request("/admin/users");
+}
+
+export function updateUserPlan(userId: string, plan: Plan): Promise<AdminUser> {
+  return request(`/admin/users/${userId}/plan`, { method: "PATCH", body: JSON.stringify({ plan }) });
 }

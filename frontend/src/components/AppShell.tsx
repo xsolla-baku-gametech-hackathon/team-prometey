@@ -1,5 +1,5 @@
 import React from "react";
-import { LayoutGrid, CreditCard, Settings as SettingsIcon, LogOut, Boxes } from "lucide-react";
+import { LayoutGrid, CreditCard, Settings as SettingsIcon, LogOut, Boxes, ShieldCheck } from "lucide-react";
 import { NavItem } from "./ui/NavItem";
 import { useAuth } from "../lib/auth";
 import { useNavigate } from "react-router-dom";
@@ -16,7 +16,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           <div className="w-8 h-8 rounded-lg bg-accent text-white flex items-center justify-center shrink-0">
             <Boxes className="w-4.5 h-4.5" />
           </div>
-          <span className="text-[15px] font-semibold tracking-tight">Loot Auditor</span>
+          <span className="text-[15px] font-semibold tracking-tight">TrueLoot</span>
         </div>
 
         <nav className="flex flex-col gap-1">
@@ -29,6 +29,11 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           <NavItem to="/settings" icon={<SettingsIcon className="w-[18px] h-[18px]" />}>
             Settings
           </NavItem>
+          {user?.is_admin && (
+            <NavItem to="/admin" icon={<ShieldCheck className="w-[18px] h-[18px]" />}>
+              Admin
+            </NavItem>
+          )}
         </nav>
 
         <div className="mt-auto pt-4 border-t border-line">
