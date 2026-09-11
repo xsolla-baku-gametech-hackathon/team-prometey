@@ -18,6 +18,50 @@ Several jurisdictions (Belgium, Netherlands, China, South Korea) have gambling-l
 
 Developer tooling for live-ops and monetization teams: catch a misconfigured loot table before it ships, not after a player — or a regulator — notices the numbers don't add up. It's a subscription product rather than a one-off script because studios patch these economies constantly and need this check every time, which is also why it's built as a real multi-user SaaS (accounts, saved tables, tiered plans) rather than a stateless single page.
 
+## How It Works
+
+An audit is four steps, run in order every time you click **Run Audit** (`POST /tables/{id}/audit` → `app/main.py`'s `_run_and_persist`): **validate**, then (if nothing blocking was found) **simulate**, then **diff against what was advertised**, then **persist the result**. Each step is its own module (`validator.py` / `simulate.py` / `compliance.py`), independently unit-tested, and none of them know about auth, plans, or the database — the SaaS layer only calls them and stores what comes back.
+
+### 1. Static validation (`validator.py`)
+
+Runs first, before any simulation, and never silently drops a bad table — every problem becomes a specific `Issue` with a `severity`:
+
+| Check | Severity | Catches |
+|---|---|---|
+| `duplicate_item_id` | error | Two items share an id |
+| `advertised_rate_out_of_range` | error | An advertised rate isn't a valid probability (outside `[0, 1]`) |
+| `pity_nonpositive_guarantee` | error | `pity.guaranteed_within_pulls` is zero or negative |
+| `nested_table_self_reference` | error | An item's `ref_table_id` points back at its own table (infinite loop) |
+| `unreachable_item` | warning | Item weight is `≤ 0` — it can never drop |
+| `missing_advertised_rate` / `orphan_advertised_rate` | warning | An item has no advertised rate, or vice versa — compliance can't be checked for it |
+| `advertised_rate_sum_drift` | warning | `advertised_rates` doesn't sum to `1.0` within 0.5 percentage points — usually a copy-paste or rounding bug |
+| `pity_target_rarity_not_found` | warning | `pity.target_rarity` doesn't match any item's `rarity` exactly (the classic case-typo, e.g. `"Legendary"` vs. `"legendary"`) |
+| `pity_dead_condition` | warning | Every item of the pity target rarity has weight `0` — the guarantee has nothing to award |
+
+Any **error** blocks the run entirely (`has_blocking_errors`): simulation is skipped, and the audit is persisted as `blocked: true` with the validation issues as the whole story. Broken data never quietly produces a "result" that looks trustworthy — it produces a clear reason it can't.
+
+### 2. Monte Carlo simulation (`simulate.py`)
+
+If validation didn't block, `simulate()` draws `num_pulls` items from the table's weighted distribution (`weight / sum(weights)` per item) using a vectorized `numpy.random.Generator.choice` — fast enough that even the Enterprise plan's 5,000,000-pull cap resolves in well under a second.
+
+If the table declares a `pity` rule, a second pass — necessarily a sequential loop, since pity depends on each pull's history — applies **hard pity**: a running counter tracks pulls since the target rarity last landed, and the moment it would reach `guaranteed_within_pulls` without a natural hit, that pull is force-overridden to one of the target-rarity items instead. `reset_on_trigger` controls whether a natural hit also resets the counter (the sane default) or only a forced one does (a real, checkable pity-config bug).
+
+**Why natural and realized rates are reported separately, and why that matters:** a *correctly configured* pity system necessarily pushes a player's actual experienced rate above the advertised base rate — that's the whole point of pity. Concretely: at a true 1% base rate with a 90-pull hard-pity guarantee, the chance a player's *natural* draws miss the target for all 90 pulls is `0.99^90 ≈ 40%` — so on a well-behaved table, roughly 4 in 10 pull-streaks get pity-saved at exactly pull 90, which alone drags the *realized* rate well above 1%. If compliance compared realized (pity-inclusive) rates against the advertised 1%, every correctly-built pity table would fail — a false positive that would make the tool useless. So `simulate()` reports two views: `item_rates` / `rarity_rates` are **natural draws only** (pity-forced pulls excluded) and are what compliance diffs against `advertised_rates`; `realized_item_rates` is the pity-inclusive "what a player actually walks away with," reported for context but never diffed. Pity's own promise — does the guarantee actually trigger in time — is checked separately, by tracking `max_pulls_observed_to_target` (the longest gap seen between hits across the whole run) and a convergence histogram (how many pulls it took to hit the target rarity, each time it happened) that drives the Pity Convergence chart.
+
+### 3. Compliance diff (`compliance.py`)
+
+Each item's natural simulated rate is compared against its advertised rate, flagged green/yellow/red by how far it's drifted — but a *fixed* percentage-point tolerance isn't enough on its own. Monte Carlo sampling has real statistical noise: at 300,000 pulls, a 25%-frequency item has a sampling standard error of `sqrt(0.25 × 0.75 / 300,000) ≈ 0.079` percentage points, so 3 standard errors is `≈ 0.24pp` — more than double this project's default 0.1pp tolerance. Without accounting for that, a perfectly correct table would randomly flag yellow/red purely from sampling variance, on a different item every time you re-ran it. So the tolerance actually applied is whichever is larger:
+
+```
+effective_tolerance = max(configured_tolerance, 3 × standard_error(advertised_rate, num_pulls))
+```
+
+i.e. "only flag a deviation big enough to be statistically distinguishable from noise, never just smaller than the regulatory tolerance floor." Status per item: `green` if `|simulated − advertised| ≤ effective_tolerance`, `yellow` if within `2×`, `red` beyond that. Pity gets its own flag, independent of the rate diff: `red` if the target rarity was never obtained at all (naturally or via pity) across the whole run, `red` if the longest observed gap exceeded the promised `guaranteed_within_pulls`, otherwise `green`. The audit's `overall_status` is simply the worst status across every item flag plus the pity flag.
+
+### 4. Frontend sync model
+
+The loot table editor (`LootTableEditor.tsx`, used by both table creation and in-place editing) treats the raw JSON textarea as the single source of truth: the visual item/pity editor is a live view re-parsed from that text on every keystroke (`useMemo`), and any GUI edit (add an item, drag a rate) immediately re-serializes straight back into the same text. There's no separate GUI state to fall out of sync with the JSON — hand-editing the JSON and using the form are always looking at the same value.
+
 ## Product Shape
 
 ```
@@ -157,7 +201,7 @@ frontend/
     App.tsx                                    React Router setup
 ```
 
-`POST /tables/{id}/audit` does validate → simulate → compliance-check and persists the result as an `AuditRun` in one call. If validation finds a blocking error (duplicate ids, nonsensical rates, a self-referencing table), simulation is skipped and the response says exactly why — never a silent failure on broken data. Core audit logic (schema/validator/simulate/compliance) is untouched from the original single-page build; everything added for the SaaS shape (auth, persistence, ownership, plan limits) wraps around it rather than modifying it.
+See "How It Works" above for what `validator.py` / `simulate.py` / `compliance.py` actually do. Core audit logic there is untouched from the original single-page build; everything added for the SaaS shape (auth, persistence, ownership, plan limits) wraps around it rather than modifying it.
 
 ## Admin / Ops
 
@@ -173,7 +217,7 @@ export TRUELOOT_ADMIN_EMAILS="you@example.com"
 # ...start the backend as usual, then sign up with you@example.com
 ```
 
-## How It Works (Demo)
+## Demo Script
 
 1. Land on `/` for a few seconds — this is a real product with plans, not a script.
 2. Sign up, land on an empty dashboard.
