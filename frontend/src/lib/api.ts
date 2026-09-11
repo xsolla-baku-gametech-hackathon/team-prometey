@@ -5,6 +5,7 @@ import type {
   LootTable,
   Plan,
   PlanLimits,
+  RegionRule,
   TableDetail,
   TableSummary,
   User,
@@ -54,6 +55,10 @@ export function fetchPlans(): Promise<Record<Plan, PlanLimits>> {
   return request("/plans", {}, false);
 }
 
+export function fetchRegions(): Promise<Record<string, RegionRule>> {
+  return request("/regions", {}, false);
+}
+
 // ── Auth ─────────────────────────────────────────────────────────────────
 
 export function signup(email: string, password: string): Promise<AuthResponse> {
@@ -101,7 +106,7 @@ export function deleteTable(id: string): Promise<void> {
 
 export function runAudit(
   tableId: string,
-  opts: { num_pulls?: number; tolerance?: number; seed?: number } = {}
+  opts: { num_pulls?: number; tolerance?: number; seed?: number; region?: string } = {}
 ): Promise<AuditRunOut> {
   return request(`/tables/${tableId}/audit`, { method: "POST", body: JSON.stringify(opts) });
 }
