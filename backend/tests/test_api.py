@@ -301,6 +301,30 @@ def test_export_is_gated_off_the_free_plan(client: TestClient):
 # ── Compliance regions ───────────────────────────────────────────────────
 
 
+def test_demo_audit_requires_no_auth_and_returns_real_results(client: TestClient):
+    res = client.post("/demo/audit")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["blocked"] is False
+    assert body["compliance"]["overall_status"] in ("red", "yellow", "green")
+    # The bundled buggy sample's planted bugs should surface every time.
+    flags = {f["item_id"]: f for f in body["compliance"]["item_flags"]}
+    assert flags["legendary_sword"]["status"] == "red"
+
+
+def test_demo_audit_rejects_unknown_region(client: TestClient):
+    res = client.post("/demo/audit", json={"region": "atlantis"})
+    assert res.status_code == 422
+
+
+def test_demo_audit_ignores_client_supplied_pull_count(client: TestClient):
+    # There's no num_pulls field on the request at all -- confirms the
+    # endpoint can't be pushed into an expensive simulation from the client.
+    res = client.post("/demo/audit", json={"region": "global", "num_pulls": 999_999_999})
+    assert res.status_code == 200
+    assert res.json()["simulation"]["num_pulls"] < 1_000_000
+
+
 def test_regions_endpoint_lists_the_bundled_packs(client: TestClient):
     res = client.get("/regions")
     assert res.status_code == 200
