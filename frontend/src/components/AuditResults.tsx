@@ -1,11 +1,11 @@
-import React from "react";
-import { Download, Printer, Wrench } from "lucide-react";
+import React, { useState } from "react";
+import { Download, Wrench } from "lucide-react";
 import type { AuditRunOut, LootTable } from "../types";
 import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 import { RateChart } from "./RateChart";
 import { PityChart } from "./PityChart";
-import { downloadComplianceReportCsv, openPrintableComplianceReport } from "../lib/report";
+import { ExportReportModal } from "./ExportReportModal";
 
 const STATUS_TONE: Record<string, "green" | "yellow" | "red"> = { green: "green", yellow: "yellow", red: "red" };
 const STATUS_LABEL: Record<string, string> = { green: "Compliant", yellow: "Borderline", red: "Non-Compliant" };
@@ -24,6 +24,7 @@ export const AuditResults: React.FC<{
 }> = ({ result, table, canExport, onApplyFix, isApplyingFix = false }) => {
   const { validation_issues, blocked, simulation, compliance } = result;
   const fixableFlags = compliance?.item_flags.filter((f) => f.suggested_weight !== null) ?? [];
+  const [isExportOpen, setIsExportOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-7">
@@ -42,12 +43,10 @@ export const AuditResults: React.FC<{
         <div className="flex-1" />
         {canExport && (
           <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => downloadComplianceReportCsv(table, result)} className="!py-1.5 !text-[13px]">
-              <Download className="w-3.5 h-3.5" /> CSV
+            <Button variant="secondary" onClick={() => setIsExportOpen(true)} className="!py-1.5 !text-[13px]">
+              <Download className="w-3.5 h-3.5" /> Export Report
             </Button>
-            <Button variant="secondary" onClick={() => openPrintableComplianceReport(table, result)} className="!py-1.5 !text-[13px]">
-              <Printer className="w-3.5 h-3.5" /> PDF
-            </Button>
+            <ExportReportModal isOpen={isExportOpen} onClose={() => setIsExportOpen(false)} table={table} result={result} />
           </div>
         )}
       </div>
