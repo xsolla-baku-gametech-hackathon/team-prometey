@@ -57,6 +57,15 @@ export interface ItemFlag {
   delta: number;
   effective_tolerance: number;
   status: FlagStatus;
+  // One-sample proportion z-test of simulated_rate against advertised_rate.
+  z_score: number;
+  p_value: number;
+  // 95% Wilson score confidence interval on the simulated rate.
+  ci_low: number;
+  ci_high: number;
+  // Exact weight that would hit advertised_rate given every other item's
+  // current weight -- only set when status != "green".
+  suggested_weight: number | null;
 }
 
 export interface PityFlag {
@@ -66,9 +75,20 @@ export interface PityFlag {
 
 export interface ComplianceReport {
   tolerance: number;
+  region_id: string;
+  alpha: number;
   item_flags: ItemFlag[];
   pity_flag: PityFlag | null;
   overall_status: FlagStatus;
+}
+
+export interface RegionRule {
+  id: string;
+  label: string;
+  alpha: number;
+  min_pp_floor: number;
+  pity_grace_pulls: number;
+  note: string;
 }
 
 // AuditRunOut from the backend -- same shape as the old stateless
@@ -80,6 +100,7 @@ export interface AuditRunOut {
   simulation: SimulationResult | null;
   compliance: ComplianceReport | null;
   created_at: string;
+  region: string;
 }
 
 // ── Multi-user / SaaS shapes ────────────────────────────────────────────
