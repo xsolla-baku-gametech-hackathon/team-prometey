@@ -1,4 +1,4 @@
-# Loot Table Balance Auditor
+# TrueLoot
 
 A SaaS tool that validates whether a game's randomized reward system (loot boxes, gacha pulls, card packs) actually behaves the way it's advertised to players. Users sign up, manage loot tables under their account, run static validation + Monte Carlo simulation against them, and get compliance flags showing whether the advertised drop rate matches the real simulated rate — including whether pity timers actually trigger correctly.
 
@@ -36,6 +36,7 @@ Sign up / log in
 | `/tables/:id/history` | Past audit runs for this table (simple version list — stretch if time-tight) |
 | `/pricing` | Plan comparison (see below), upgrade CTA |
 | `/settings` | Account info, current plan, API usage if relevant |
+| `/admin` | Internal ops dashboard (admin accounts only) — monitor signups, manually change a user's plan. Since there's no real billing (section 4), this is how a sales-assisted upgrade actually takes effect. Added post-MVP; a startup this small runs on a human flipping a switch before it's worth building self-serve billing. |
 
 Keep routing flat and simple — this is React Router or Next.js App Router, not a complex nested app shell.
 

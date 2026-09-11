@@ -108,7 +108,7 @@ export const PricingPage: React.FC = () => {
           <div className="w-8 h-8 rounded-lg bg-accent text-white flex items-center justify-center">
             <Boxes className="w-4.5 h-4.5" />
           </div>
-          <span className="text-[15px] font-semibold tracking-tight">Loot Auditor</span>
+          <span className="text-[15px] font-semibold tracking-tight">TrueLoot</span>
         </div>
         <nav className="flex items-center gap-3">
           <Link to="/login" className="text-[14px] text-ink-muted hover:text-ink px-3 py-2">

@@ -1,4 +1,4 @@
-# Loot Table Balance Auditor
+# TrueLoot
 
 A SaaS tool that checks whether a game's randomized reward system (loot boxes, gacha pulls, card packs) actually behaves the way it's advertised to players. Users sign up, save loot table configs under their account, run static validation + Monte Carlo simulation against them, and get compliance flags showing whether the advertised drop rate matches the real simulated rate — including whether pity timers actually trigger correctly.
 
@@ -39,6 +39,7 @@ Sign up / log in
 | `/tables/:id` | Table detail: run audit, validation issues, compliance flags, charts, history |
 | `/pricing` | Plan comparison |
 | `/settings` | Account info, current plan |
+| `/admin` | Ops dashboard (admin accounts only) — every user, their plan, and a way to change it |
 
 ## Plans
 
@@ -82,6 +83,7 @@ None are required to run locally — the backend falls back to a dev-only JWT se
 ```bash
 export LOOT_AUDITOR_JWT_SECRET="a long random value"   # required outside localhost
 export LOOT_AUDITOR_DB_PATH="./loot_auditor.db"          # optional, defaults shown
+export TRUELOOT_ADMIN_EMAILS="you@yourteam.com"            # optional, grants /admin access -- see "Admin / Ops" below
 ```
 
 ## Run
@@ -105,9 +107,9 @@ cd backend
 .venv/bin/python3 -m pytest tests/ -v
 ```
 
-32/32 should pass, across two files:
+37/37 should pass, across two files:
 - `test_auditor.py` (17 tests) — the bug-injection self-test suite, proving the validator, simulator, and compliance diff each catch what they claim to, exercising `app.schema`/`validator`/`simulate`/`compliance` directly.
-- `test_api.py` (15 tests) — drives the actual HTTP surface with FastAPI's `TestClient` against an isolated in-memory SQLite database per test: signup/login, cross-user ownership isolation (user B gets a 404 touching user A's table, not their data), and plan-gated limits (free tier's 1-table cap, pull-count cap, export gate, last-run-only history).
+- `test_api.py` (20 tests) — drives the actual HTTP surface with FastAPI's `TestClient` against an isolated in-memory SQLite database per test: signup/login, cross-user ownership isolation (user B gets a 404 touching user A's table, not their data), plan-gated limits (free tier's 1-table cap, pull-count cap, export gate, last-run-only history), and the admin allowlist/plan-change flow (non-admins get 403, allowlisted emails get promoted on signup or login, plan changes actually persist).
 
 ## Build (frontend)
 
@@ -129,9 +131,9 @@ backend/
     db_models.py               User / LootTableRecord / AuditRun (SQLAlchemy)
     auth.py                      bcrypt hashing + JWT issue/verify
     plans.py                       free/studio/enterprise limits
-    main.py                          FastAPI app: auth, table CRUD, audit, history
+    main.py                          FastAPI app: auth, table CRUD, audit, history, admin
   samples/              bundled demo loot tables (clean + buggy)
-  .env.example          documents LOOT_AUDITOR_JWT_SECRET / LOOT_AUDITOR_DB_PATH
+  .env.example          documents LOOT_AUDITOR_JWT_SECRET / LOOT_AUDITOR_DB_PATH / TRUELOOT_ADMIN_EMAILS
   tests/
     test_auditor.py       bug-injection self-test suite (core logic only)
     test_api.py              HTTP-layer tests: auth, ownership isolation, plan gating
@@ -149,12 +151,27 @@ frontend/
       ProtectedRoute.tsx                    redirects to /login when logged out
       LootTableEditor.tsx                     GUI item/pity editor, synced with the raw JSON view
       CompareRuns.tsx                           side-by-side diff between two saved audit runs
+      AdminRoute.tsx                              like ProtectedRoute, plus an is_admin check
       AuditResults.tsx, RateChart.tsx, PityChart.tsx
-    pages/                                   one file per route
+    pages/                                   one file per route (AdminPage.tsx included)
     App.tsx                                    React Router setup
 ```
 
 `POST /tables/{id}/audit` does validate → simulate → compliance-check and persists the result as an `AuditRun` in one call. If validation finds a blocking error (duplicate ids, nonsensical rates, a self-referencing table), simulation is skipped and the response says exactly why — never a silent failure on broken data. Core audit logic (schema/validator/simulate/compliance) is untouched from the original single-page build; everything added for the SaaS shape (auth, persistence, ownership, plan limits) wraps around it rather than modifying it.
+
+## Admin / Ops
+
+There's no self-serve payment processor (see Known Weaknesses), which means every real upgrade in this MVP is sales-assisted: a customer emails support, and someone on the team flips their plan. `/admin` is that internal tool, not a customer-facing feature.
+
+- **Access**: set `TRUELOOT_ADMIN_EMAILS` (comma-separated) before starting the backend. Anyone with a matching email gets admin the next time they sign up *or* log in — no separate role-management UI, no migration script, just an operator editing a config value. This is the standard "before it's worth building real RBAC" pattern for an early-stage product.
+- **What it shows**: every account (email, plan, saved-table count, join date), plus a small stats strip (total users, free vs. paid split, total saved tables) — the smallest useful proxy for "how's the business doing" without wiring up real billing/analytics.
+- **What it does**: change any user's plan inline. The change is real and immediate (not a mock) — it goes through the same `plan` field every other plan-gated check in the app reads from.
+
+Demo it locally:
+```bash
+export TRUELOOT_ADMIN_EMAILS="you@example.com"
+# ...start the backend as usual, then sign up with you@example.com
+```
 
 ## How It Works (Demo)
 
@@ -164,13 +181,14 @@ frontend/
 4. Run the audit. You'll see the validation warnings, red compliance flags on `legendary_sword` and `common_sword`, and a red pity flag ("never obtained, naturally or via pity, across the whole simulation").
 5. Create a second table from `starter_chest_clean` — the same config with all three bugs fixed — and run its audit. Every flag goes green, including pity (which correctly caps every simulated pull-streak at exactly 90 pulls).
 6. Run `pytest tests/ -v` in a terminal to show the self-test suite proving all of this is actually verified, not just eyeballed.
-7. One-line the business model: studios running gacha/loot-box economies need this check every time they patch the economy, not once — which is why it's a subscription product with saved tables and plan tiers, not a one-off script.
+7. One-line the business model: studios running gacha/loot-box economies need this check every time they patch the economy, not once — which is why it's a subscription product with saved tables and plan tiers, not a one-off script. Since there's no payment processor yet, `/admin` is how an upgrade conversation actually turns into an upgraded account today.
 
 ## Known Weaknesses
 
-- No real payment processing — plan gating is enforced in-app but not billed.
+- No real payment processing — plan gating is enforced in-app but not billed; `/admin` is the manual lever a real upgrade pulls today.
 - Tolerance/compliance logic is a single configurable threshold, not region-specific (Belgium vs. China vs. Korea have different actual disclosure rules).
 - Auth is minimal (email/password only, no SSO) — fine for a hackathon demo, not enterprise-ready as-is.
+- Admin access is an env-configured email allowlist with no UI to grant/revoke it and no audit log of who changed which user's plan when — fine for a small internal team, not how you'd run this once the team doesn't fully trust each other.
 - PDF export opens a print-formatted page and relies on the browser's own "Save as PDF" print destination rather than generating a PDF server-side — works everywhere without a new dependency, but isn't a one-click file.
 - No side-by-side diff between two different *tables* (only between two audit *runs* of the same table) — editing a table in place and re-running is the supported way to see whether a fix worked.
 - Realistic path to market is likely as a compliance module inside a larger live-ops/analytics platform rather than a standalone company at scale — still a legitimate standalone SaaS at small scale (indie/mid studios), which is the story worth telling to judges.

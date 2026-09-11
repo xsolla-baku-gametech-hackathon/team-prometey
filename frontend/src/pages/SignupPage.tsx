@@ -35,7 +35,7 @@ export const SignupPage: React.FC = () => {
           <div className="w-9 h-9 rounded-lg bg-accent text-white flex items-center justify-center">
             <Boxes className="w-5 h-5" />
           </div>
-          <span className="text-[17px] font-semibold tracking-tight">Loot Auditor</span>
+          <span className="text-[17px] font-semibold tracking-tight">TrueLoot</span>
         </div>
 
         <Card className="p-8">
