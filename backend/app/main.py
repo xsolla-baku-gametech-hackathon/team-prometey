@@ -4,6 +4,7 @@ TrueLoot API -- multi-user SaaS shape (PROJECT.md section 8).
     POST /auth/signup                     create an account
     POST /auth/login                      get a JWT
     GET  /user/me                         current user info
+    PUT  /user/password                   change the current user's password
 
     GET    /tables                        list the current user's saved tables
     POST   /tables                        save a new loot table (plan-gated count)
@@ -150,6 +151,22 @@ def login(req: LoginRequest, db: Session = Depends(get_session)) -> AuthResponse
 @app.get("/user/me", response_model=UserOut)
 def get_me(current_user: User = Depends(get_current_user)) -> UserOut:
     return _user_out(current_user)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=8, max_length=72)
+
+
+@app.put("/user/password")
+def change_password(
+    req: ChangePasswordRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_session)
+) -> dict:
+    if not verify_password(req.current_password, current_user.password_hash):
+        raise HTTPException(401, "Current password is incorrect.")
+    current_user.password_hash = hash_password(req.new_password)
+    db.commit()
+    return {"changed": True}
 
 
 # ── Loot tables (protected CRUD) ───────────────────────────────────────────
