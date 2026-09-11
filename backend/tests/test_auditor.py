@@ -201,3 +201,113 @@ def test_duplicate_and_unreachable_sample_table():
     assert "duplicate_item_id" in codes(issues)
     assert "unreachable_item" in codes(issues)
     assert has_blocking_errors(issues)
+
+
+# ── Statistical rigor: Wilson intervals, z-test, region packs ──────────
+
+
+def test_wilson_interval_contains_point_estimate_and_narrows_with_n():
+    from app.compliance import _wilson_interval
+
+    for n in (1_000, 100_000, 1_000_000):
+        low, high = _wilson_interval(0.25, n)
+        assert low < 0.25 < high
+
+    narrow_low, narrow_high = _wilson_interval(0.25, 1_000_000)
+    wide_low, wide_high = _wilson_interval(0.25, 1_000)
+    assert (narrow_high - narrow_low) < (wide_high - wide_low)
+
+
+def test_z_test_p_value_shrinks_as_deviation_or_sample_size_grows():
+    from app.compliance import _z_test
+
+    _, p_small_n = _z_test(0.011, 0.01, 10_000)
+    _, p_large_n = _z_test(0.011, 0.01, 1_000_000)
+    assert p_large_n < p_small_n  # same relative deviation, more data -> more confident it's real
+
+    _, p_small_delta = _z_test(0.0101, 0.01, 300_000)
+    _, p_large_delta = _z_test(0.02, 0.01, 300_000)
+    assert p_large_delta < p_small_delta
+
+
+def test_bonferroni_correction_divides_alpha_by_item_count(clean_table_dict):
+    table = LootTable.model_validate(clean_table_dict)
+    sim = simulate(table, num_pulls=300_000, seed=123)
+    report = compute_compliance(table, sim, region="global")
+    from app.regions import REGIONS
+
+    assert report.alpha == pytest.approx(REGIONS["global"].alpha / len(table.advertised_rates))
+
+
+def test_region_pack_flags_a_drift_global_tolerates(clean_table_dict):
+    # A small, realistic balance-patch drift (legendary weight 10 -> 11,
+    # ~0.09pp) sits inside global's looser practical-tolerance floor but
+    # outside Belgium's tighter one -- the region pack should be the
+    # deciding factor, not a coincidence of the underlying stats.
+    mutated = copy.deepcopy(clean_table_dict)
+    for item in mutated["items"]:
+        if item["id"] == "legendary_sword":
+            item["weight"] = 11
+    table = LootTable.model_validate(mutated)
+    sim = simulate(table, num_pulls=1_000_000, seed=7)
+
+    global_report = compute_compliance(table, sim, region="global")
+    belgium_report = compute_compliance(table, sim, region="belgium")
+
+    global_flag = next(f for f in global_report.item_flags if f.item_id == "legendary_sword")
+    belgium_flag = next(f for f in belgium_report.item_flags if f.item_id == "legendary_sword")
+    assert global_flag.status == "green"
+    assert belgium_flag.status == "red"
+
+
+def test_suggested_weight_fixes_the_flagged_item(clean_table_dict):
+    # Plant the same drift as the diverging-odds test, take the suggested
+    # weight it computes, apply it, and confirm the item is actually
+    # green afterward -- proves the algebra is correct end-to-end, not
+    # just plausible-looking.
+    mutated = copy.deepcopy(clean_table_dict)
+    for item in mutated["items"]:
+        if item["id"] == "legendary_sword":
+            item["weight"] = 14
+    broken_table = LootTable.model_validate(mutated)
+    sim = simulate(broken_table, num_pulls=300_000, seed=99)
+    report = compute_compliance(broken_table, sim, region="global")
+    flag = next(f for f in report.item_flags if f.item_id == "legendary_sword")
+    assert flag.status == "red"
+    assert flag.suggested_weight is not None
+
+    fixed = copy.deepcopy(mutated)
+    for item in fixed["items"]:
+        if item["id"] == "legendary_sword":
+            item["weight"] = flag.suggested_weight
+    fixed_table = LootTable.model_validate(fixed)
+    fixed_sim = simulate(fixed_table, num_pulls=1_000_000, seed=99)
+    fixed_report = compute_compliance(fixed_table, fixed_sim, region="global")
+    fixed_flag = next(f for f in fixed_report.item_flags if f.item_id == "legendary_sword")
+    assert fixed_flag.status == "green"
+
+
+def test_suggested_weight_is_none_for_compliant_items(clean_table_dict):
+    table = LootTable.model_validate(clean_table_dict)
+    sim = simulate(table, num_pulls=300_000, seed=123)
+    report = compute_compliance(table, sim, region="global")
+    assert all(f.suggested_weight is None for f in report.item_flags if f.status == "green")
+
+
+def test_pity_grace_period_forgives_a_small_overshoot(clean_table_dict):
+    from app.regions import RegionRule
+
+    table = LootTable.model_validate(clean_table_dict)
+    sim = simulate(table, num_pulls=300_000, seed=123)
+    strict = RegionRule(id="t", label="t", alpha=0.01, min_pp_floor=0.001, pity_grace_pulls=0, note="")
+
+    # Force an artificial overshoot to exercise the grace period without
+    # depending on simulation internals.
+    sim.pity.max_pulls_observed_to_target = table.pity.guaranteed_within_pulls + 2
+
+    strict_report = compute_compliance(table, sim, region=strict)
+    assert strict_report.pity_flag.status == "red"
+
+    lenient = strict.model_copy(update={"pity_grace_pulls": 5})
+    lenient_report = compute_compliance(table, sim, region=lenient)
+    assert lenient_report.pity_flag.status == "green"
