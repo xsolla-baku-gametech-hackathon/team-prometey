@@ -80,9 +80,10 @@ Sign up / log in
 | `/login`, `/signup` | Auth |
 | `/dashboard` | Saved loot tables (card grid, status dot per table), "New Audit" CTA |
 | `/tables/new` | Create/upload a loot table (paste JSON, upload a file, or start from a bundled sample) |
-| `/tables/:id` | Table detail: run audit, validation issues, compliance flags, charts, history |
+| `/tables/:id` | Table detail: run audit, validation issues, compliance flags, charts |
+| `/tables/:id/history` | Past audit runs for this table -- drill into any one, compare two |
 | `/pricing` | Plan comparison |
-| `/settings` | Account info, current plan |
+| `/settings` | Account info, current plan, change password, logout |
 | `/admin` | Ops dashboard (admin accounts only) — every user, their plan, and a way to change it |
 
 ## Plans
