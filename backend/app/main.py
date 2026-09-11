@@ -22,6 +22,7 @@ TrueLoot API -- multi-user SaaS shape (PROJECT.md section 8).
     GET /samples                          bundled demo tables, for "start from a template"
     GET /plans                            plan tiers + limits, for the pricing page
     GET /regions                          compliance rule packs, for the audit region selector
+    POST /demo/audit                      public, unauthenticated demo audit for the landing page
     GET /health                           liveness check
 
 Every /tables, /admin, and /auth-adjacent route (other than signup/login)
@@ -102,6 +103,47 @@ def list_samples() -> dict[str, dict]:
         with open(path) as f:
             samples[path.stem] = json.load(f)
     return samples
+
+
+# ── Public demo (landing page "Run Sample Audit") ──────────────────────────
+#
+# Unauthenticated, unpersisted, and deliberately not plan-gated -- this is
+# marketing surface, not a saved user table. num_pulls is fixed server-side
+# (never taken from the request) specifically so this public, no-login
+# endpoint can't be used to force an arbitrarily expensive simulation.
+
+DEMO_NUM_PULLS = 200_000
+
+
+class DemoAuditRequest(BaseModel):
+    region: str = "global"
+
+
+class DemoAuditOut(BaseModel):
+    validation_issues: list[Issue]
+    blocked: bool
+    simulation: SimulationResult | None = None
+    compliance: ComplianceReport | None = None
+
+
+@app.post("/demo/audit", response_model=DemoAuditOut)
+def run_demo_audit(body: DemoAuditRequest = DemoAuditRequest()) -> DemoAuditOut:
+    if body.region not in REGIONS:
+        raise HTTPException(422, f"Unknown region '{body.region}'. Must be one of: {', '.join(REGIONS)}.")
+
+    with open(SAMPLES_DIR / "starter_chest_buggy.json") as f:
+        table = LootTable.model_validate(json.load(f))
+
+    issues = validate_table(table)
+    blocked = has_blocking_errors(issues)
+
+    sim: SimulationResult | None = None
+    report: ComplianceReport | None = None
+    if not blocked:
+        sim = simulate(table, num_pulls=DEMO_NUM_PULLS)  # unseeded -- a fresh random run every click, on purpose
+        report = compute_compliance(table, sim, region=region_for(body.region))
+
+    return DemoAuditOut(validation_issues=issues, blocked=blocked, simulation=sim, compliance=report)
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────
